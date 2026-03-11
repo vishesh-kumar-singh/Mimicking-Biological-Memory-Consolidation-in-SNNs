@@ -137,7 +137,7 @@ class SNNLayerLTP_LTD(nn.Module):
         P (Tensor): P-factor buffer [out_dim], registered as non-trainable buffer
     """
     
-    def __init__(self, in_dim, out_dim, threshold=1.0, tau=2.0):
+    def __init__(self, in_dim, out_dim, threshold=1.0, tau=2.0, scale_weights=True):
         """
         Initialize LTP/LTD layer.
         
@@ -146,10 +146,12 @@ class SNNLayerLTP_LTD(nn.Module):
             out_dim (int): Output dimension (postsynaptic neurons)
             threshold (float): Spike threshold for LIF neurons
             tau (float): Membrane time constant
+            scale_weights (bool): If True, modulate weights by (1+P). If False, use raw weights.
         """
         super().__init__()
         self.linear = nn.Linear(in_dim, out_dim, bias=False)
         self.neuron = LIFNeuron(size=out_dim, threshold=threshold, tau=tau)
+        self.scale_weights = scale_weights
         
         # P-factor: registered as buffer (not a parameter, not trained by optimizer)
         # Initialized to 0, updated by LTP/LTD rules
@@ -157,12 +159,12 @@ class SNNLayerLTP_LTD(nn.Module):
         
     def forward(self, input_spikes):
         """
-        Forward pass with P-factor weight modulation.
+        Forward pass with optional P-factor weight modulation.
         
-        The effective weight is computed as:
+        If scale_weights is True:
             W_eff = W * (1 + P)
-        
-        where P is broadcast to match weight dimensions.
+        If scale_weights is False:
+            W_eff = W (P-factors still tracked but not used for scaling)
         
         Args:
             input_spikes (Tensor): Binary spike input [batch_size, in_dim]
@@ -170,14 +172,12 @@ class SNNLayerLTP_LTD(nn.Module):
         Returns:
             Tensor: Output spikes [batch_size, out_dim]
         """
-        # Modulate weights by P-factor: W_eff = W * (1 + P)
-        # P.unsqueeze(1) makes P [out_dim, 1] for broadcasting with W [out_dim, in_dim]
-        effective_weight = self.linear.weight * (1 + self.P.unsqueeze(1))
+        if self.scale_weights:
+            effective_weight = self.linear.weight * (1 + self.P.unsqueeze(1))
+            I = torch.nn.functional.linear(input_spikes, effective_weight)
+        else:
+            I = self.linear(input_spikes)
         
-        # Compute synaptic current using modulated weights
-        I = torch.nn.functional.linear(input_spikes, effective_weight)
-        
-        # Generate output spikes
         spikes = self.neuron(I)
         return spikes
 
@@ -209,7 +209,7 @@ class SNNModelLTP_LTD(nn.Module):
         - This preserves Task A knowledge in high-P neurons
     """
     
-    def __init__(self, input_size=784, hidden_size=256, output_size=10, time_steps=100, threshold=1.0):
+    def __init__(self, input_size=784, hidden_size=256, output_size=10, time_steps=100, threshold=1.0, scale_weights=True):
         """
         Initialize the LTP/LTD SNN.
         
@@ -219,11 +219,12 @@ class SNNModelLTP_LTD(nn.Module):
             output_size (int): Output classes (10 for MNIST)
             time_steps (int): Number of simulation timesteps
             threshold (float): Spike threshold for neurons
+            scale_weights (bool): If True, modulate weights by (1+P). If False, use raw weights.
         """
         super().__init__()
         self.time_steps = time_steps
-        self.layer1 = SNNLayerLTP_LTD(input_size, hidden_size, threshold=threshold)
-        self.layer2 = SNNLayerLTP_LTD(hidden_size, output_size, threshold=threshold)
+        self.layer1 = SNNLayerLTP_LTD(input_size, hidden_size, threshold=threshold, scale_weights=scale_weights)
+        self.layer2 = SNNLayerLTP_LTD(hidden_size, output_size, threshold=threshold, scale_weights=scale_weights)
 
     def reset(self):
         """Reset all neuron membrane potentials between samples."""

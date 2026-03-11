@@ -34,6 +34,14 @@
 | 0.60 | 22.49 ± 4.81 | 97.54 ± 0.53 | 59.43 ± 2.61 |
 | 0.80 | 40.69 ± 2.28 | 97.04 ± 0.64 | 68.66 ± 1.63 |
 
+## NoScale Freezing Experiments Summary
+
+| Percentile | Task A Retention (Mean ± Std) | Task B Accuracy (Mean ± Std) | Combined (Mean ± Std) |
+| :--- | :--- | :--- | :--- |
+| 0.40 | 9.60 ± 7.43 | 97.47 ± 0.32 | 53.11 ± 3.92 |
+| 0.60 | 31.42 ± 6.71 | 97.72 ± 0.24 | 64.34 ± 3.44 |
+| 0.80 | 51.72 ± 3.15 | 96.67 ± 0.77 | 74.29 ± 1.57 |
+
 ## Best Retention Runs (Freezing)
 
 | Percentile | Best Retention (Task A) | Corresponding Task B | Corresponding Combined |

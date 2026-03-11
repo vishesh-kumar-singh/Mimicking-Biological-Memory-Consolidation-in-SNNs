@@ -1,3 +1,21 @@
+"""
+generate_summary.py - Results Aggregation and README Generation
+
+Generates per-folder README.md files summarizing experiment results and
+an aggregated root README.md across all epoch configurations.
+
+Supported experiment types:
+- Baseline (cl_baseline.json): No freezing control
+- Freezing (freezing_*.json): P-factor based engram freezing
+- Random (random_*.json): Random neuron freezing control
+- Index (index_*.json): Index-based neuron freezing control
+- NoScale (noscale_*.json): P-factor tracking without weight scaling ablation
+
+Usage:
+------
+    Called by scripts/analyze_results.py, not typically run directly.
+"""
+
 import os
 import json
 import glob
@@ -5,11 +23,23 @@ import re
 import numpy as np
 import argparse
 
+
 def load_json(filepath):
+    """Load and parse a JSON results file."""
     with open(filepath, 'r') as f:
         return json.load(f)
 
+
 def generate_summary(results_dir):
+    """
+    Generate a README.md summarizing all experiment results in a directory.
+    
+    Reads all JSON result files, extracts mean/std statistics, and writes
+    a formatted markdown table for each experiment type.
+    
+    Args:
+        results_dir (str): Path to results_epochs_N directory
+    """
     readme_path = os.path.join(results_dir, "README.md")
     
     # Load Baseline
@@ -65,6 +95,22 @@ def generate_summary(results_dir):
             continue
             
     index_results.sort(key=lambda x: x[0])
+
+    # Load NoScale Freezing Results
+    noscale_files = glob.glob(os.path.join(results_dir, "noscale_*.json"))
+    noscale_results = []
+    
+    for f in noscale_files:
+        filename = os.path.basename(f)
+        try:
+            percentile_str = filename.replace("noscale_", "").replace(".json", "")
+            percentile = float(percentile_str) / 100.0
+            data = load_json(f)
+            noscale_results.append((percentile, data))
+        except ValueError:
+            continue
+            
+    noscale_results.sort(key=lambda x: x[0])
     
     with open(readme_path, "w") as f:
         f.write(f"# Experiment Results Summary ({os.path.basename(results_dir)})\n\n")
@@ -143,6 +189,29 @@ def generate_summary(results_dir):
             f.write("| :--- | :--- | :--- | :--- |\n")
             
             for p, data in index_results:
+                if "average" in data:
+                    avg = data["average"]
+                    a_mean = avg.get('final_task_a_mean', 0)
+                    a_std = avg.get('final_task_a_std', 0)
+                    
+                    b_mean_list = avg.get('task_b_mean', [])
+                    b_std_list = avg.get('task_b_std', [])
+                    b_mean = b_mean_list[-1] if isinstance(b_mean_list, list) and b_mean_list else 0
+                    b_std = b_std_list[-1] if isinstance(b_std_list, list) and b_std_list else 0
+                    
+                    c_mean = avg.get('eval_all_mean', 0)
+                    c_std = avg.get('eval_all_std', 0)
+                    
+                    f.write(f"| {p:.2f} | {a_mean:.2f} ± {a_std:.2f} | {b_mean:.2f} ± {b_std:.2f} | {c_mean:.2f} ± {c_std:.2f} |\n")
+            f.write("\n")
+
+        # NoScale Freezing Section
+        if noscale_results:
+            f.write("## NoScale Freezing Experiments Summary\n\n")
+            f.write("| Percentile | Task A Retention (Mean ± Std) | Task B Accuracy (Mean ± Std) | Combined (Mean ± Std) |\n")
+            f.write("| :--- | :--- | :--- | :--- |\n")
+            
+            for p, data in noscale_results:
                 if "average" in data:
                     avg = data["average"]
                     a_mean = avg.get('final_task_a_mean', 0)
@@ -301,6 +370,37 @@ def generate_root_readme():
             content += "| :--- | :--- | :--- | :--- |\n"
             
             for p, data in index_results:
+                if "average" in data:
+                    avg = data["average"]
+                    a_mean = avg.get('final_task_a_mean', 0)
+                    b_mean_list = avg.get('task_b_mean', [])
+                    b_mean = b_mean_list[-1] if isinstance(b_mean_list, list) and b_mean_list else 0
+                    c_mean = avg.get('eval_all_mean', 0)
+                    
+                    content += f"| {p:.2f} | {a_mean:.2f}% | {b_mean:.2f}% | {c_mean:.2f}% |\n"
+            content += "\n"
+
+        # NoScale Freezing
+        noscale_files = glob.glob(os.path.join(results_dir, "noscale_*.json"))
+        noscale_results = []
+        for f in noscale_files:
+            try:
+                filename = os.path.basename(f)
+                percentile_str = filename.replace("noscale_", "").replace(".json", "")
+                percentile = float(percentile_str) / 100.0
+                data = load_json(f)
+                noscale_results.append((percentile, data))
+            except ValueError:
+                continue
+        
+        noscale_results.sort(key=lambda x: x[0])
+        
+        if noscale_results:
+            content += "**NoScale Freezing Experiments:**\n\n"
+            content += "| Percentile | Task A Retention | Task B Accuracy | Combined |\n"
+            content += "| :--- | :--- | :--- | :--- |\n"
+            
+            for p, data in noscale_results:
                 if "average" in data:
                     avg = data["average"]
                     a_mean = avg.get('final_task_a_mean', 0)

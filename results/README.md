@@ -70,6 +70,14 @@ Aggregated results for mitigating catastrophic forgetting in SNNs.
 | 0.60 | 22.49% | 97.54% | 59.43% |
 | 0.80 | 40.69% | 97.04% | 68.66% |
 
+**NoScale Freezing Experiments:**
+
+| Percentile | Task A Retention | Task B Accuracy | Combined |
+| :--- | :--- | :--- | :--- |
+| 0.40 | 9.60% | 97.47% | 53.11% |
+| 0.60 | 31.42% | 97.72% | 64.34% |
+| 0.80 | 51.72% | 96.67% | 74.29% |
+
 ---
 
 ### Results for 4 Epochs per Task
