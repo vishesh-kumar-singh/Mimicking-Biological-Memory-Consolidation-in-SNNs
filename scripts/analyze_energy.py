@@ -276,7 +276,11 @@ def run_energy_analysis(seed, epochs, percentile, data_dir=DATA_DIR, is_nmnist=F
     
     if os.path.exists(ckpt_path):
         print(f"Loading Task A checkpoint: {ckpt_path}")
-        model.load_state_dict(torch.load(ckpt_path, map_location=DEVICE))
+        checkpoint = torch.load(ckpt_path, map_location=DEVICE, weights_only=False)
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
     else:
         print("No checkpoint found. Training Task A from scratch...")
         criterion = nn.CrossEntropyLoss()
