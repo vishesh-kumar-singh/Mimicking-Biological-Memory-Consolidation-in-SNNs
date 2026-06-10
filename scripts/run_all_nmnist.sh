@@ -4,7 +4,7 @@
 
 echo "Starting 2-Task Split-NMNIST Sweep..."
 
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "======================================"
         echo "Epochs: $e | Percentile: $p"

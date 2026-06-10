@@ -28,7 +28,7 @@ echo "=============================================="
 # -----------------------------------------------
 echo ""
 echo ">>> [1/8] BASELINE (no freezing)"
-for e in 5 3 1; do
+for e in 1 3 5; do
     echo "--- Baseline: epochs=$e ---"
     python -u scripts/run_baseline.py --epochs $e --runs $RUNS
 done
@@ -38,7 +38,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [2/8] P-FACTOR FREEZING (proposed method)"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- Freezing: epochs=$e, percentile=$p ---"
         python -u scripts/run_freezing.py --epochs $e --runs $RUNS --percentile $p
@@ -50,7 +50,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [3/8] RANDOM FREEZING (control)"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- Random: epochs=$e, percentile=$p ---"
         python -u scripts/run_random.py --epochs $e --runs $RUNS --percentile $p
@@ -62,7 +62,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [5/8] NO-SCALE ABLATION"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- NoScale: epochs=$e, percentile=$p ---"
         python -u scripts/run_noscale.py --epochs $e --runs $RUNS --percentile $p
@@ -74,7 +74,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [6/8] NO-RESET ABLATION"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- NoReset: epochs=$e, percentile=$p ---"
         python -u scripts/run_noreset.py --epochs $e --runs $RUNS --percentile $p
@@ -86,7 +86,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [7/8] RESET-ZERO VARIANT"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- ResetZero: epochs=$e, percentile=$p ---"
         python -u scripts/run_reset_variants.py --epochs $e --runs $RUNS --percentile $p --reset_type zero
@@ -98,7 +98,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [8/8] RESET-SCALE VARIANT"
-for e in 5 3 1; do
+for e in 1 3 5; do
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- ResetScale: epochs=$e, percentile=$p ---"
         python -u scripts/run_reset_variants.py --epochs $e --runs $RUNS --percentile $p --reset_type scale
