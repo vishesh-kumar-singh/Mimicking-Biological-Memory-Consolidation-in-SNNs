@@ -116,7 +116,7 @@ def run_experiment(run_id, epochs, seed, percentile, hidden_size=1024, checkpoin
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         try:
-            torch.use_deterministic_algorithms(True)
+            torch.use_deterministic_algorithms(True, warn_only=True)
         except Exception:
             pass
         

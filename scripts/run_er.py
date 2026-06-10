@@ -106,7 +106,7 @@ def run_experiment(run_id, epochs, seed, buffer_per_class, is_nmnist=False):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         try:
-            torch.use_deterministic_algorithms(True)
+            torch.use_deterministic_algorithms(True, warn_only=True)
         except Exception:
             pass
     

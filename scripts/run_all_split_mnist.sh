@@ -43,77 +43,65 @@ for e in 1 3 5; do
         echo "--- Freezing: epochs=$e, percentile=$p ---"
         python -u scripts/run_freezing.py --epochs $e --runs $RUNS --percentile $p
     done
-done
 
 # -----------------------------------------------
 # 3. Random Freezing (control) — epochs 1,3,5, percentiles 0.2-0.8
 # -----------------------------------------------
-echo ""
-echo ">>> [3/8] RANDOM FREEZING (control)"
-for e in 1 3 5; do
+
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- Random: epochs=$e, percentile=$p ---"
         python -u scripts/run_random.py --epochs $e --runs $RUNS --percentile $p
     done
-done
+
 
 # -----------------------------------------------
 # 5. No-Scale ablation — epochs 5, percentiles 40,60,80
 # -----------------------------------------------
-echo ""
-echo ">>> [5/8] NO-SCALE ABLATION"
-for e in 1 3 5; do
+
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- NoScale: epochs=$e, percentile=$p ---"
         python -u scripts/run_noscale.py --epochs $e --runs $RUNS --percentile $p
     done
-done
+
 
 # -----------------------------------------------
 # 6. No-Reset ablation — epochs 5, percentiles 40,60,80
 # -----------------------------------------------
-echo ""
-echo ">>> [6/8] NO-RESET ABLATION"
-for e in 1 3 5; do
+
+
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- NoReset: epochs=$e, percentile=$p ---"
         python -u scripts/run_noreset.py --epochs $e --runs $RUNS --percentile $p
     done
-done
+
 
 # -----------------------------------------------
 # 7. Reset Zero variant — epochs 5, percentiles 40,60,80
 # -----------------------------------------------
-echo ""
-echo ">>> [7/8] RESET-ZERO VARIANT"
-for e in 1 3 5; do
+
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- ResetZero: epochs=$e, percentile=$p ---"
         python -u scripts/run_reset_variants.py --epochs $e --runs $RUNS --percentile $p --reset_type zero
     done
-done
+
 
 # -----------------------------------------------
 # 8. Reset Scale variant — epochs 5, percentiles 40,60,80
 # -----------------------------------------------
-echo ""
-echo ">>> [8/8] RESET-SCALE VARIANT"
-for e in 1 3 5; do
+
     for p in 0.2 0.4 0.6 0.8; do
         echo "--- ResetScale: epochs=$e, percentile=$p ---"
         python -u scripts/run_reset_variants.py --epochs $e --runs $RUNS --percentile $p --reset_type scale
     done
-done
 
 # -----------------------------------------------
 # 9. Energy & Computational Cost Analysis
 # -----------------------------------------------
-echo ""
-echo ">>> [BONUS] ENERGY & COMPUTATIONAL COST ANALYSIS"
-for e in 1 3 5; do
+
     echo "--- Energy comparison: epochs=$e ---"
     python -u scripts/analyze_energy.py --epochs $e --compare --seed 42
 done
+
 
 echo ""
 echo "=============================================="

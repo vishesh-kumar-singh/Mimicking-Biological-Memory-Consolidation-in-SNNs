@@ -138,7 +138,7 @@ def run_experiment(run_id, epochs, seed, percentile):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         try:
-            torch.use_deterministic_algorithms(True)
+            torch.use_deterministic_algorithms(True, warn_only=True)
         except Exception:
             pass
 
@@ -270,8 +270,8 @@ def run_experiment(run_id, epochs, seed, percentile):
             p1 = model.layer1.P
             print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
 
-        print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile})...")
-        static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile)
+    print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile})...")
+    static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile)
 
 
 
