@@ -30,7 +30,7 @@ def get_all_results(epochs_list=[1, 2, 3, 4, 5]):
     """
     all_results = {}
     for epoch in epochs_list:
-        results_dir = f"results_epochs_{epoch}"
+        results_dir = f"results/SNN/Split-MNIST/epochs_{epoch}"
         if not os.path.exists(results_dir):
             continue
             

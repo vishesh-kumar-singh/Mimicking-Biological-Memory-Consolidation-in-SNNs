@@ -112,6 +112,23 @@ def generate_summary(results_dir):
             
     noscale_results.sort(key=lambda x: x[0])
     
+    # Load Reset Variants Results
+    reset_variants = ["noreset", "reset_zero", "reset_scale"]
+    reset_results = {variant: [] for variant in reset_variants}
+    
+    for variant in reset_variants:
+        files = glob.glob(os.path.join(results_dir, f"{variant}_*.json"))
+        for f in files:
+            filename = os.path.basename(f)
+            try:
+                percentile_str = filename.replace(f"{variant}_", "").replace(".json", "")
+                percentile = float(percentile_str) / 100.0
+                data = load_json(f)
+                reset_results[variant].append((percentile, data))
+            except ValueError:
+                continue
+        reset_results[variant].sort(key=lambda x: x[0])
+
     with open(readme_path, "w") as f:
         f.write(f"# Experiment Results Summary ({os.path.basename(results_dir)})\n\n")
         
@@ -227,6 +244,30 @@ def generate_summary(results_dir):
                     
                     f.write(f"| {p:.2f} | {a_mean:.2f} ± {a_std:.2f} | {b_mean:.2f} ± {b_std:.2f} | {c_mean:.2f} ± {c_std:.2f} |\n")
             f.write("\n")
+            
+        # Reset Variants Sections
+        for variant, results in reset_results.items():
+            if results:
+                f.write(f"## {variant.replace('_', ' ').title()} Experiments Summary\n\n")
+                f.write("| Percentile | Task A Retention (Mean ± Std) | Task B Accuracy (Mean ± Std) | Combined (Mean ± Std) |\n")
+                f.write("| :--- | :--- | :--- | :--- |\n")
+                
+                for p, data in results:
+                    if "average" in data:
+                        avg = data["average"]
+                        a_mean = avg.get('final_task_a_mean', 0)
+                        a_std = avg.get('final_task_a_std', 0)
+                        
+                        b_mean_list = avg.get('task_b_mean', [])
+                        b_std_list = avg.get('task_b_std', [])
+                        b_mean = b_mean_list[-1] if isinstance(b_mean_list, list) and b_mean_list else 0
+                        b_std = b_std_list[-1] if isinstance(b_std_list, list) and b_std_list else 0
+                        
+                        c_mean = avg.get('eval_all_mean', 0)
+                        c_std = avg.get('eval_all_std', 0)
+                        
+                        f.write(f"| {p:.2f} | {a_mean:.2f} ± {a_std:.2f} | {b_mean:.2f} ± {b_std:.2f} | {c_mean:.2f} ± {c_std:.2f} |\n")
+                f.write("\n")
 
         # Best Retention Runs (Freezing)
         if freezing_results:
@@ -256,12 +297,11 @@ def generate_root_readme():
     """Aggregates results from all results/results_epochs_* directories into results/README.md"""
     root_readme_path = "results/README.md"
     
-    # Find all results directories
-    all_dirs = glob.glob("results/results_epochs_*")
+    all_dirs = glob.glob("results/SNN/Split-MNIST/epochs_*")
     epoch_dirs = []
     for d in all_dirs:
         if os.path.isdir(d):
-            match = re.search(r'results_epochs_(\d+)', d)
+            match = re.search(r'epochs_(\d+)', d)
             if match:
                 epochs = int(match.group(1))
                 epoch_dirs.append((epochs, d))

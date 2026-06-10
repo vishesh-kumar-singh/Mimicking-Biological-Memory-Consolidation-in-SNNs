@@ -42,7 +42,7 @@ import argparse
 # Add src to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.dataset import SpikeMNISTDataset, NMNISTDatasetWrapper
+from src.dataset import SpikeMNISTDataset
 from src.models import SNNModelLTP_LTD, update_p_factor_combined
 
 # =============================================================================
@@ -80,7 +80,6 @@ def evaluate(model, dataloader, device, task_classes=None):
             out = model(spikes)
             
             if task_classes is not None:
-                # Mask out all classes not belonging to the current task
                 mask = torch.ones_like(out, dtype=torch.bool)
                 mask[:, task_classes] = False
                 out[mask] = -float('inf')
@@ -92,27 +91,11 @@ def evaluate(model, dataloader, device, task_classes=None):
     return total_correct / total_samples * 100 if total_samples > 0 else 0
 
 
-def generate_static_mask_and_reset(model, threshold_percentile=0.7):
+def generate_static_mask_and_reset(model, threshold_percentile=0.7, reset_type="kaiming"):
     """
     Generate freezing masks based on P-factor values and reset plastic neurons.
     
-    This is the core consolidation step between Task A and Task B:
-    1. Identify neurons with P-factor in the top (threshold_percentile)
-    2. Create gradient masks: 0 for frozen (high P), 1 for plastic (low P)
-    3. Re-initialize weights of plastic neurons for Task B learning
-    4. Always freeze output heads 0-4 (Task A outputs)
-    
-    The mask is applied to gradients during Task B training to prevent
-    updates to frozen neurons.
-    
-    Args:
-        model (SNNModelLTP_LTD): Trained model with P-factors
-        threshold_percentile (float): Fraction of neurons to freeze (0.7 = 70%)
-        
-    Returns:
-        dict: Gradient masks for each layer
-            - 'layer1': [hidden_size, 1] mask
-            - 'layer2': [output_size, 1] mask
+    reset_type can be: "kaiming" (default), "zero", or "scale" (multiply by 0.1)
     """
     masks = {}
     
@@ -120,9 +103,7 @@ def generate_static_mask_and_reset(model, threshold_percentile=0.7):
         p1 = model.layer1.P.detach()
         
         # Calculate the P-value threshold for freezing
-        # k = number of neurons to freeze
         k = int(p1.size(0) * threshold_percentile)
-        # Find the k-th largest P value (neurons with P >= threshold are frozen)
         threshold1 = torch.kthvalue(p1, p1.size(0) - k + 1).values
         
         # Create mask: 0 for frozen (high P), 1 for plastic (low P)
@@ -133,13 +114,21 @@ def generate_static_mask_and_reset(model, threshold_percentile=0.7):
         novice_indices = torch.where(mask1.squeeze() == 1)[0]
         if len(novice_indices) > 0:
             with torch.no_grad():
-                nn.init.kaiming_uniform_(model.layer1.linear.weight[novice_indices], a=np.sqrt(5))
-                if model.layer1.linear.bias is not None:
-                     nn.init.zeros_(model.layer1.linear.bias[novice_indices])
+                if reset_type == "kaiming":
+                    nn.init.kaiming_uniform_(model.layer1.linear.weight[novice_indices], a=np.sqrt(5))
+                    if model.layer1.linear.bias is not None:
+                         nn.init.zeros_(model.layer1.linear.bias[novice_indices])
+                elif reset_type == "zero":
+                    nn.init.zeros_(model.layer1.linear.weight[novice_indices])
+                    if model.layer1.linear.bias is not None:
+                         nn.init.zeros_(model.layer1.linear.bias[novice_indices])
+                elif reset_type == "scale":
+                    model.layer1.linear.weight[novice_indices] *= 0.1
+                    if model.layer1.linear.bias is not None:
+                         model.layer1.linear.bias[novice_indices] *= 0.1
 
     if hasattr(model, 'layer2'):
         # Output layer: always freeze Task A outputs (neurons 0-4)
-        # This prevents Task A predictions from being corrupted
         mask2 = torch.ones(model.layer2.linear.weight.shape[0], 1).to(p1.device)
         mask2[0:5] = 0.0  # Freeze outputs 0-4 (Task A digits)
         masks['layer2'] = mask2
@@ -148,14 +137,22 @@ def generate_static_mask_and_reset(model, threshold_percentile=0.7):
         if hasattr(model.layer2, 'P'):
             with torch.no_grad():
                 model.layer2.P[5:] = 0.0  # Reset P-factors for Task B outputs
-                nn.init.kaiming_uniform_(model.layer2.linear.weight[5:], a=np.sqrt(5))
+                if reset_type == "kaiming":
+                    nn.init.kaiming_uniform_(model.layer2.linear.weight[5:], a=np.sqrt(5))
+                elif reset_type == "zero":
+                    nn.init.zeros_(model.layer2.linear.weight[5:])
+                elif reset_type == "scale":
+                    model.layer2.linear.weight[5:] *= 0.1
+                    
                 if model.layer2.linear.bias is not None:
-                    nn.init.zeros_(model.layer2.linear.bias[5:])
+                    if reset_type == "kaiming" or reset_type == "zero":
+                        nn.init.zeros_(model.layer2.linear.bias[5:])
+                    elif reset_type == "scale":
+                        model.layer2.linear.bias[5:] *= 0.1
                     
     return masks
 
-
-def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnist=False):
+def run_experiment(run_id, epochs, seed, percentile, reset_type):
     """
     Run a single continual learning experiment with P-factor freezing.
     
@@ -164,8 +161,6 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
         epochs (int): Training epochs per task
         seed (int): Random seed for reproducibility
         percentile (float): Fraction of neurons to freeze
-        data_dir (str): Directory containing dataset
-        is_nmnist (bool): Whether to use NMNISTDatasetWrapper
         
     Returns:
         dict: Experiment results containing:
@@ -178,6 +173,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     print(f"RUN {run_id+1} (Seed {seed}, Percentile {percentile})")
     print(f"{'='*40}")
     
+    # Set random seeds for reproducibility
     import random
     os.environ['PYTHONHASHSEED'] = str(seed)
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
@@ -194,21 +190,18 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
         except Exception:
             pass
     
-    if is_nmnist:
-        dataset_a = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=[0,1,2,3,4])
-        dataset_b = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=[5,6,7,8,9])
-        dataset_all = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=list(range(10)))
-        input_dim = 2312
-    else:
-        spike_file = os.path.join(data_dir, "spike_trains_100ts.npy")
-        label_file = os.path.join(data_dir, "labels.npy")
-        if not os.path.exists(spike_file):
-            print("Data not found.")
-            return None
-        dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
-        dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
-        dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
-        input_dim = 784
+    # Load spike-encoded MNIST data
+    spike_file = os.path.join(DATA_DIR, "spike_trains_100ts.npy")
+    label_file = os.path.join(DATA_DIR, "labels.npy")
+    if not os.path.exists(spike_file):
+        print("Data not found.")
+        return None
+
+    # Create datasets for continual learning
+    # Task A: digits 0-4, Task B: digits 5-9
+    dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
+    dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
+    dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
     
     def get_loader(ds):
         """Split dataset 80/20 and create DataLoaders."""
@@ -225,10 +218,11 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     _, test_all = get_loader(dataset_all)
     
     # Initialize LTP/LTD SNN model
-    model = SNNModelLTP_LTD(input_size=input_dim, hidden_size=HIDDEN_SIZE).to(DEVICE)
+    model = SNNModelLTP_LTD(hidden_size=HIDDEN_SIZE).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
+    # Track experiment history
     history = {
         "full_curve": [],         # Task A accuracy over all epochs (Class-IL)
         "full_curve_task_il": [], # Task A accuracy over all epochs (Task-IL)
@@ -243,48 +237,34 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     # =========================================================================
     print("--- Phase 1: Training Task A ---")
     
-    # Checkpoint path for Task A
-    dataset_name = "NMNIST" if is_nmnist else "MNIST"
-    ckpt_dir = os.path.join("checkpoints", dataset_name)
+    ckpt_dir = os.path.join("checkpoints", "MNIST")
     os.makedirs(ckpt_dir, exist_ok=True)
     ckpt_path = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epochs}_taskA.pt")
     
-    if os.path.exists(ckpt_path):
-        print(f"Loading Task A state from checkpoint: {ckpt_path}")
-        try:
-            checkpoint = torch.load(ckpt_path, map_location=DEVICE, weights_only=False)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
-            np.random.set_state(checkpoint['np_rng_state'])
-            if torch.cuda.is_available() and 'cuda_rng_state' in checkpoint:
-                torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu())
-            start_epoch = epochs
-        except Exception as e_msg:
-            print(f"Error loading full state checkpoint: {e_msg}. Ignoring.")
-            start_epoch = 0
-    else:
-        start_epoch = 0
-        for e in range(epochs, 0, -1):
-            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{e}_taskA.pt")
-            if os.path.exists(temp_ckpt):
-                print(f"Loading Task A state from checkpoint: {temp_ckpt}")
-                try:
-                    checkpoint = torch.load(temp_ckpt, map_location=DEVICE, weights_only=False)
-                    model.load_state_dict(checkpoint['model_state_dict'])
-                    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-                    torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
-                    np.random.set_state(checkpoint['np_rng_state'])
-                    if torch.cuda.is_available() and 'cuda_rng_state' in checkpoint:
-                        torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu())
-                    start_epoch = e
-                    break
-                except Exception as e_msg:
-                    print(f"Error loading full state checkpoint: {e_msg}. Ignoring.")
+    start_epoch = 0
+    # Try to find the exact checkpoint, or the highest available previous checkpoint
+    for e in range(epochs, 0, -1):
+        temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{e}_taskA.pt")
+        if os.path.exists(temp_ckpt):
+            print(f"Loading Task A state from checkpoint: {temp_ckpt}")
+            try:
+                checkpoint = torch.load(temp_ckpt, map_location=DEVICE, weights_only=False)
+                if 'optimizer_state_dict' not in checkpoint:
+                    print("Old checkpoint format detected. Ignoring.")
                     continue
-
+                model.load_state_dict(checkpoint['model_state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
+                np.random.set_state(checkpoint['np_rng_state'])
+                if torch.cuda.is_available() and 'cuda_rng_state' in checkpoint:
+                    torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu())
+                start_epoch = e
+                break
+            except Exception as e_msg:
+                print(f"Error loading checkpoint: {e_msg}")
+                continue
+            
     if start_epoch > 0:
-        # We still need to evaluate to populate history
         acc = evaluate(model, test_a, DEVICE)
         acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
         for _ in range(start_epoch):
@@ -292,50 +272,47 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
             history["full_curve_task_il"].append(acc_task_il)
             
         print(f"Loaded Checkpoint Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
-        p1 = model.layer1.P
-        print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
+        if hasattr(model, 'layer1') and hasattr(model.layer1, 'P'):
+            p1 = model.layer1.P
+            print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
         
     for epoch in range(start_epoch, epochs):
             model.train()
             total_correct = 0
             total_samples = 0
-            
+        
             pbar = tqdm(train_a, desc=f"Task A Epoch {epoch+1}")
             for s, l in pbar:
                 s, l = s.to(DEVICE), l.to(DEVICE)
-                
+            
                 # Forward pass
                 optimizer.zero_grad()
                 model.reset()
                 out = model(s)
                 loss = criterion(out, l)
-                
+            
                 # Backward pass
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
-                
+            
                 # Track accuracy
                 preds = out.argmax(dim=1)
                 total_correct += (preds == l).sum().item()
                 total_samples += l.size(0)
-                
+            
                 # Apply LTP/LTD P-factor updates based on prediction correctness
                 update_p_factor_combined(model, preds, l, alpha_ltp=0.01)
-                
+            
                 pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
-                    
+                
             # Evaluate Task A performance
             acc = evaluate(model, test_a, DEVICE)
-            acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
             history["full_curve"].append(acc)
+            acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
             history["full_curve_task_il"].append(acc_task_il)
             print(f"Epoch {epoch+1} Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
-            
-            # Report P-factor statistics
-            p1 = model.layer1.P
-            print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
-    
+
             # SAVE EVERY EPOCH WITH FULL STATE
             temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epoch+1}_taskA.pt")
             checkpoint = {
@@ -347,12 +324,22 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
             if torch.cuda.is_available():
                 checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
             torch.save(checkpoint, temp_ckpt)
+        
+            # Report P-factor statistics
+            p1 = model.layer1.P
+            print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
+
+
+
+
+
+
 
     # =========================================================================
     # CONSOLIDATION: Freeze high-P neurons, reset low-P neurons
     # =========================================================================
-    print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile})...")
-    static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile)
+    print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile}, Reset {reset_type})...")
+    static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile, reset_type=reset_type)
 
     # =========================================================================
     # PHASE 2: Train on Task B (digits 5-9) with frozen neurons
@@ -429,19 +416,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="P-Factor Freezing Experiment")
     parser.add_argument("--runs", type=int, default=1, help="Number of runs with different seeds")
     parser.add_argument("--epochs", type=int, default=5, help="Epochs per task")
-    parser.add_argument("--percentile", type=float, default=0.7, help="Freezing percentile (0.7 = 70%)")
-    parser.add_argument("--data_dir", type=str, default="spike_mnist_dataset", help="Directory with spike data")
-    parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Name for results directory")
-    parser.add_argument("--is_nmnist", action="store_true", help="Use NMNISTDatasetWrapper")
+    parser.add_argument("--percentile", type=float, default=0.8, help="Freezing percentile (0.8 = 80%)")
+    parser.add_argument("--reset_type", type=str, default="kaiming", choices=["kaiming", "zero", "scale"], help="Reset strategy for novice neurons")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results
     
     # Setup output path
     percentile_int = int(args.percentile * 100)
-    output_dir = f"results/SNN/{args.dataset_name}/epochs_{args.epochs}"
+    output_dir = f"results/SNN/Split-MNIST/epochs_{args.epochs}"
     os.makedirs(output_dir, exist_ok=True)
-    results_file = f"{output_dir}/freezing_{percentile_int}.json"
+    results_file = f"{output_dir}/reset_{args.reset_type}_{percentile_int}.json"
     
     # Load existing results (supports resuming interrupted experiments)
     histories = parse_results_file(results_file)
@@ -473,7 +458,7 @@ if __name__ == "__main__":
     
     while runs_completed < runs_needed:
         if current_seed not in existing_seeds:
-            hist = run_experiment(len(histories), args.epochs, current_seed, args.percentile, data_dir=args.data_dir, is_nmnist=args.is_nmnist)
+            hist = run_experiment(len(histories), args.epochs, current_seed, args.percentile, args.reset_type)
             if hist:
                 hist['seed'] = current_seed
                 histories.append(hist)

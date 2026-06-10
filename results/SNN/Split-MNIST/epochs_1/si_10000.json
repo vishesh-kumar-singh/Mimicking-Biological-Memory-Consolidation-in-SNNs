@@ -1,0 +1,57 @@
+{
+    "average": {
+        "full_curve_mean": [
+            97.92920106338325,
+            18.31537708129285
+        ],
+        "full_curve_std": [
+            0.0,
+            0.0
+        ],
+        "task_b_mean": [
+            92.26616080548665
+        ],
+        "task_b_std": [
+            0.0
+        ],
+        "eval_all_mean": 54.6,
+        "eval_all_std": 0.0,
+        "final_task_a_mean": 18.31537708129285,
+        "final_task_a_std": 0.0,
+        "full_curve_task_il_mean": [
+            97.92920106338325,
+            93.56373303483979
+        ],
+        "full_curve_task_il_std": [
+            0.0,
+            0.0
+        ],
+        "task_b_task_il_mean": [
+            92.29534510433388
+        ],
+        "task_b_task_il_std": [
+            0.0
+        ]
+    },
+    "runs": [
+        {
+            "full_curve": [
+                97.92920106338325,
+                18.31537708129285
+            ],
+            "full_curve_task_il": [
+                97.92920106338325,
+                93.56373303483979
+            ],
+            "task_b": [
+                92.26616080548665
+            ],
+            "task_b_task_il": [
+                92.29534510433388
+            ],
+            "eval_all": 54.6,
+            "final_task_a": 18.31537708129285,
+            "seed": 42
+        }
+    ]
+}

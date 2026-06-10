@@ -38,7 +38,7 @@ def get_all_results(epochs_list=[1, 2, 3, 4, 5]):
     """
     all_results = {}
     for epoch in epochs_list:
-        results_dir = f"results/results_epochs_{epoch}"
+        results_dir = f"results/SNN/Split-MNIST/epochs_{epoch}"
         if not os.path.exists(results_dir):
             continue
             
@@ -481,13 +481,12 @@ def plot_detailed_curves(results_dir):
 
 def analyze_all_folders():
                                            
-    all_dirs = glob.glob("results/results_epochs_*")
+    all_dirs = glob.glob("results/neuron_level/epochs_*")
     
-                                     
     epoch_dirs = []
     for d in all_dirs:
         if os.path.isdir(d):
-            match = re.search(r'results_epochs_(\d+)', d)
+            match = re.search(r'epochs_(\d+)', d)
             if match:
                 epochs = int(match.group(1))
                 epoch_dirs.append((epochs, d))
@@ -495,7 +494,7 @@ def analyze_all_folders():
     epoch_dirs.sort(key=lambda x: x[0])
     
     if not epoch_dirs:
-        print("No results_epochs_* directories found.")
+        print("No neuron_level/epochs_* directories found.")
         return
 
     print(f"Found {len(epoch_dirs)} result directories: {[d[1] for d in epoch_dirs]}")

@@ -202,3 +202,42 @@ def generate_spike_data(mat_file, output_dir, time_steps=100, chunk_size=1000):
     print(f"Unique labels in written file: {np.unique(written_labels)}")
     
     print("Generation complete.")
+
+import torch
+import tonic
+import tonic.transforms as transforms
+
+class NMNISTDatasetWrapper(torch.utils.data.Dataset):
+    """
+    Wrapper for tonic's N-MNIST dataset for continual learning.
+    Transforms event streams into dense spike frames of shape (time_steps, 2312)
+    where 2312 = 34 * 34 * 2 (W * H * Polarity).
+    """
+    def __init__(self, save_to='./data', train=True, time_steps=100, target_digits=None):
+        sensor_size = tonic.datasets.NMNIST.sensor_size
+        # Transform events to frames: (time_steps, 2, 34, 34)
+        transform = transforms.Compose([
+            transforms.ToFrame(sensor_size=sensor_size, n_time_bins=time_steps)
+        ])
+        
+        self.dataset = tonic.datasets.NMNIST(save_to=save_to, train=train, transform=transform)
+        
+        # Filter indices for specific tasks (e.g. 0-4 for Task A)
+        if target_digits is not None:
+            self.indices = [i for i, target in enumerate(self.dataset.targets) if target in target_digits]
+        else:
+            self.indices = list(range(len(self.dataset)))
+            
+    def __len__(self):
+        return len(self.indices)
+        
+    def __getitem__(self, idx):
+        real_idx = self.indices[idx]
+        events, target = self.dataset[real_idx]
+        
+        # events shape: (time_steps, 2, 34, 34)
+        # We need to flatten it to (time_steps, 2312)
+        # and cast to float32 since the model expects float/float32 spikes
+        spikes = torch.tensor(events, dtype=torch.float32).view(events.shape[0], -1)
+        
+        return spikes, target

@@ -103,3 +103,11 @@ logs/
 *.tmp
 *.temp
 *.swp
+*.tex
+*.txt
+
+# Massive Datasets (Preventing git push HTTP 500 error)
+data/
+FashionMNIST/
+spike_fashion_mnist_dataset/
+MNIST/

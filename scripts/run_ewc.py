@@ -1,22 +1,17 @@
 """
-run_baseline.py - Baseline Continual Learning Experiment (No Freezing)
+run_ewc.py - Elastic Weight Consolidation (EWC) Experiment
 
-This script trains a baseline SNN sequentially on Task A (digits 0-4) then
-Task B (digits 5-9) WITHOUT any memory protection mechanism. This demonstrates
-catastrophic forgetting: the model loses Task A knowledge when learning Task B.
-
-The baseline results serve as the lower bound for comparison with all freezing
-methods (P-factor, random, index, and no-scale).
+This script trains an SNN sequentially on Task A then Task B using EWC to mitigate
+catastrophic forgetting. EWC computes the Fisher Information Matrix after Task A
+and adds a penalty term during Task B to protect important weights.
 
 Usage:
 ------
-    python scripts/run_baseline.py --epochs 3 --runs 5
+    python scripts/run_ewc.py --epochs 3 --runs 5 --ewc_lambda 1000.0
 """
 
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -24,14 +19,16 @@ from tqdm import tqdm
 import numpy as np
 import json
 import argparse
+import random
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from src.dataset import SpikeMNISTDataset
+from src.dataset import SpikeMNISTDataset, NMNISTDatasetWrapper
 from src.models import SNNModelBaseline
 
 # =============================================================================
-# Hyperparameters (same as other experiments for fair comparison)
+# Hyperparameters
 # =============================================================================
 BATCH_SIZE = 32
 HIDDEN_SIZE = 1024
@@ -41,7 +38,6 @@ DATA_DIR = "spike_mnist_dataset"
 
 
 def evaluate(model, dataloader, device, task_classes=None):
-    """Evaluate model accuracy on a dataloader."""
     model.eval()
     total_correct = 0
     total_samples = 0
@@ -63,27 +59,42 @@ def evaluate(model, dataloader, device, task_classes=None):
     return total_correct / total_samples * 100 if total_samples > 0 else 0
 
 
-def run_experiment(run_id, epochs, seed):
-    """
-    Run a single baseline continual learning experiment.
+def compute_fisher(model, dataloader, criterion, num_samples=256, device=DEVICE):
+    """Compute empirical Fisher Information Matrix."""
+    model.eval()
+    fisher = {n: torch.zeros_like(p.data) for n, p in model.named_parameters() if p.requires_grad}
+    count = 0
     
-    Trains Task A then Task B with NO freezing. Expects catastrophic forgetting
-    (Task A accuracy drops to ~0% after Task B training).
-    
-    Args:
-        run_id (int): Run identifier for logging
-        epochs (int): Training epochs per task
-        seed (int): Random seed for reproducibility
-        
-    Returns:
-        dict: History with full_curve, task_b, eval_all, final_task_a
-    """
+    for spikes, labels in dataloader:
+        spikes, labels = spikes.to(device), labels.to(device)
+        for i in range(spikes.size(0)):
+            model.zero_grad()
+            model.reset()
+            # Batch of size 1
+            out = model(spikes[i:i+1])
+            loss = criterion(out, labels[i:i+1])
+            loss.backward()
+            
+            for n, p in model.named_parameters():
+                if p.requires_grad and p.grad is not None:
+                    fisher[n] += p.grad.data ** 2
+            
+            count += 1
+            if count >= num_samples:
+                break
+        if count >= num_samples:
+            break
+            
+    for n in fisher:
+        fisher[n] /= count
+    return fisher
+
+
+def run_experiment(run_id, epochs, seed, ewc_lambda, is_nmnist=False):
     print(f"\n{'='*40}")
-    print(f"RUN {run_id+1} (Seed {seed})")
+    print(f"RUN {run_id+1} (Seed {seed}, EWC Lambda {ewc_lambda})")
     print(f"{'='*40}")
     
-    # Set seed for reproducibility
-    import random
     os.environ['PYTHONHASHSEED'] = str(seed)
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     random.seed(seed)
@@ -99,17 +110,21 @@ def run_experiment(run_id, epochs, seed):
         except Exception:
             pass
     
-    # Load spike-encoded MNIST data
-    spike_file = os.path.join(DATA_DIR, "spike_trains_100ts.npy")
-    label_file = os.path.join(DATA_DIR, "labels.npy")
-    if not os.path.exists(spike_file):
-        print("Data not found.")
-        return None
-
-    # Continual learning datasets: Task A (0-4), Task B (5-9), All (0-9)
-    dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
-    dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
-    dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
+    if is_nmnist:
+        dataset_a = NMNISTDatasetWrapper(save_to=DATA_DIR, train=True, target_digits=[0,1,2,3,4])
+        dataset_b = NMNISTDatasetWrapper(save_to=DATA_DIR, train=True, target_digits=[5,6,7,8,9])
+        dataset_all = NMNISTDatasetWrapper(save_to=DATA_DIR, train=True, target_digits=list(range(10)))
+        input_dim = 2312
+    else:
+        spike_file = os.path.join(DATA_DIR, "spike_trains_100ts.npy")
+        label_file = os.path.join(DATA_DIR, "labels.npy")
+        if not os.path.exists(spike_file):
+            print("Data not found.")
+            return None
+        dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
+        dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
+        dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
+        input_dim = 784
     
     def get_loader(ds):
         train_size = int(0.8 * len(ds))
@@ -120,8 +135,7 @@ def run_experiment(run_id, epochs, seed):
     train_b, test_b = get_loader(dataset_b)
     _, test_all = get_loader(dataset_all)
     
-    # Baseline SNN (no P-factors, no freezing)
-    model = SNNModelBaseline(hidden_size=HIDDEN_SIZE).to(DEVICE)
+    model = SNNModelBaseline(input_size=input_dim, hidden_size=HIDDEN_SIZE).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -134,24 +148,19 @@ def run_experiment(run_id, epochs, seed):
         "final_task_a": 0.0
     }
 
-    # Phase 1: Train on Task A (digits 0-4)
+    # Phase 1: Train on Task A
     print("--- Phase 1: Training Task A ---")
-    
-    ckpt_dir = os.path.join("checkpoints", "MNIST")
+    dataset_name = "NMNIST" if is_nmnist else "MNIST"
+    ckpt_dir = os.path.join("checkpoints", dataset_name)
     os.makedirs(ckpt_dir, exist_ok=True)
-    ckpt_path = os.path.join(ckpt_dir, f"baseline_seed_{seed}_epochs_{epochs}_taskA.pt")
     
     start_epoch = 0
-    # Try to find the exact checkpoint, or the highest available previous checkpoint
     for e in range(epochs, 0, -1):
         temp_ckpt = os.path.join(ckpt_dir, f"baseline_seed_{seed}_epochs_{e}_taskA.pt")
         if os.path.exists(temp_ckpt):
             print(f"Loading Task A state from checkpoint: {temp_ckpt}")
             try:
                 checkpoint = torch.load(temp_ckpt, map_location=DEVICE, weights_only=False)
-                if 'optimizer_state_dict' not in checkpoint:
-                    print("Old checkpoint format detected. Ignoring.")
-                    continue
                 model.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                 torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
@@ -170,65 +179,14 @@ def run_experiment(run_id, epochs, seed):
         for _ in range(start_epoch):
             history["full_curve"].append(acc)
             history["full_curve_task_il"].append(acc_task_il)
-            
         print(f"Loaded Checkpoint Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
 
-        
     for epoch in range(start_epoch, epochs):
-            model.train()
-            total_correct = 0
-            total_samples = 0
-            
-            pbar = tqdm(train_a, desc=f"Task A Epoch {epoch+1}")
-            for s, l in pbar:
-                s, l = s.to(DEVICE), l.to(DEVICE)
-                optimizer.zero_grad(); model.reset()
-                out = model(s)
-                loss = criterion(out, l)
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-                
-                preds = out.argmax(dim=1)
-                total_correct += (preds == l).sum().item()
-                total_samples += l.size(0)
-                
-                pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
-                    
-            acc = evaluate(model, test_a, DEVICE)
-            acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
-            history["full_curve"].append(acc)
-            history["full_curve_task_il"].append(acc_task_il)
-            print(f"Epoch {epoch+1} Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
-
-            # SAVE EVERY EPOCH WITH FULL STATE
-            temp_ckpt = os.path.join(ckpt_dir, f"baseline_seed_{seed}_epochs_{epoch+1}_taskA.pt")
-            checkpoint = {
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'torch_rng_state': torch.get_rng_state(),
-                'np_rng_state': np.random.get_state(),
-            }
-            if torch.cuda.is_available():
-                checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
-            torch.save(checkpoint, temp_ckpt)
-
-
-
-
-
-
-    # Phase 2: Train on Task B (digits 5-9) - NO PROTECTION for Task A
-    print("\n--- Phase 2: Training Task B ---")
-    # Reset optimizer for Task B training
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-
-    for epoch in range(epochs):
         model.train()
         total_correct = 0
         total_samples = 0
         
-        pbar = tqdm(train_b, desc=f"Task B Epoch {epoch+1}")
+        pbar = tqdm(train_a, desc=f"Task A Epoch {epoch+1}")
         for s, l in pbar:
             s, l = s.to(DEVICE), l.to(DEVICE)
             optimizer.zero_grad(); model.reset()
@@ -241,24 +199,74 @@ def run_experiment(run_id, epochs, seed):
             preds = out.argmax(dim=1)
             total_correct += (preds == l).sum().item()
             total_samples += l.size(0)
-            
             pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
+                
+        acc = evaluate(model, test_a, DEVICE)
+        acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
+        history["full_curve"].append(acc)
+        history["full_curve_task_il"].append(acc_task_il)
+        print(f"Epoch {epoch+1} Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
+
+        temp_ckpt = os.path.join(ckpt_dir, f"baseline_seed_{seed}_epochs_{epoch+1}_taskA.pt")
+        checkpoint = {
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'torch_rng_state': torch.get_rng_state(),
+            'np_rng_state': np.random.get_state(),
+        }
+        if torch.cuda.is_available():
+            checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
+        torch.save(checkpoint, temp_ckpt)
+
+    print("\n[System] Computing Fisher Information Matrix (FIM)...")
+    fisher = compute_fisher(model, train_a, criterion, num_samples=256, device=DEVICE)
+    optimal_params = {n: p.data.clone() for n, p in model.named_parameters() if p.requires_grad}
+
+    # Phase 2: Train on Task B with EWC
+    print("\n--- Phase 2: Training Task B (EWC) ---")
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+
+    for epoch in range(epochs):
+        model.train()
+        total_correct = 0
+        total_samples = 0
+        
+        pbar = tqdm(train_b, desc=f"Task B Epoch {epoch+1}")
+        for s, l in pbar:
+            s, l = s.to(DEVICE), l.to(DEVICE)
+            optimizer.zero_grad(); model.reset()
+            out = model(s)
+            ce_loss = criterion(out, l)
             
-        # Measure Task A retention (expected to drop to ~0%)
+            # EWC Penalty
+            ewc_loss = 0.0
+            for n, p in model.named_parameters():
+                if p.requires_grad and n in fisher:
+                    ewc_loss += (fisher[n] * (p - optimal_params[n]) ** 2).sum()
+                    
+            loss = ce_loss + (ewc_lambda * ewc_loss)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            
+            preds = out.argmax(dim=1)
+            total_correct += (preds == l).sum().item()
+            total_samples += l.size(0)
+            
+            pbar.set_postfix({"CE": ce_loss.item(), "EWC": ewc_loss.item(), "Acc": total_correct/total_samples})
+            
         acc_retention = evaluate(model, test_a, DEVICE)
         acc_retention_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
         history["full_curve"].append(acc_retention)
         history["full_curve_task_il"].append(acc_retention_task_il)
         print(f"Epoch {epoch+1} Task A Retention (Class-IL): {acc_retention:.2f}% | (Task-IL): {acc_retention_task_il:.2f}%")
 
-        # Measure Task B learning
         acc_b = evaluate(model, test_b, DEVICE)
         acc_b_task_il = evaluate(model, test_b, DEVICE, task_classes=[5,6,7,8,9])
         history["task_b"].append(acc_b)
         history["task_b_task_il"].append(acc_b_task_il)
         print(f"Epoch {epoch+1} Task B Accuracy (Class-IL): {acc_b:.2f}% | (Task-IL): {acc_b_task_il:.2f}%")
         
-    # Final combined evaluation
     acc_all = evaluate(model, test_all, DEVICE)
     print(f"Combined Test Accuracy: {acc_all:.2f}%")
     
@@ -269,33 +277,22 @@ def run_experiment(run_id, epochs, seed):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Baseline Continual Learning Experiment")
+    parser = argparse.ArgumentParser(description="EWC Continual Learning Experiment")
     parser.add_argument("--runs", type=int, default=1, help="Number of runs with different seeds")
     parser.add_argument("--epochs", type=int, default=5, help="Epochs per task")
+    parser.add_argument("--ewc_lambda", type=float, default=1000.0, help="EWC penalty strength")
+    parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Dataset name")
+    parser.add_argument("--is_nmnist", action="store_true", help="Use NMNIST")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results
     
-    # Output path
-    results_file = f"results/SNN/Split-MNIST/epochs_{args.epochs}/cl_baseline.json"
+    lambda_int = int(args.ewc_lambda)
+    results_file = f"results/SNN/{args.dataset_name}/epochs_{args.epochs}/ewc_{lambda_int}.json"
     os.makedirs(os.path.dirname(results_file), exist_ok=True)
     
-    # Check for existing results (idempotency)
     histories = parse_results_file(results_file)
-    
-    # Migrate legacy format if needed
-    if not histories:
-        print("No aggregated results found. Checking for legacy JSON files...")
-        legacy_histories = load_legacy_json("results", "baseline_run_*.json")
-        if legacy_histories:
-            print(f"Found {len(legacy_histories)} legacy runs. Merging...")
-            histories.extend(legacy_histories)
-    
-    # Track existing seeds to avoid duplicates
-    existing_seeds = set()
-    for h in histories:
-        if 'seed' in h:
-            existing_seeds.add(h['seed'])
+    existing_seeds = {h['seed'] for h in histories if 'seed' in h}
             
     runs_needed = args.runs - len(histories)
     if runs_needed <= 0:
@@ -309,7 +306,7 @@ if __name__ == "__main__":
     
     while runs_completed < runs_needed:
         if current_seed not in existing_seeds:
-            hist = run_experiment(len(histories), args.epochs, current_seed)
+            hist = run_experiment(len(histories), args.epochs, current_seed, args.ewc_lambda, args.is_nmnist)
             if hist:
                 hist['seed'] = current_seed
                 histories.append(hist)
@@ -321,4 +318,3 @@ if __name__ == "__main__":
     if args.runs == 0 and histories:
          save_aggregated_results(results_file, histories)
          print(f"Aggregated results saved to {results_file}")
-

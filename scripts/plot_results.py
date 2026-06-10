@@ -245,7 +245,7 @@ def plot_percentile_comparison(results_dir):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--results_dir", type=str, default="results_epochs_1", help="Directory containing results")
+    parser.add_argument("--results_dir", type=str, default="results/SNN/Split-MNIST/epochs_1", help="Directory containing results")
     args = parser.parse_args()
     
                                                                       

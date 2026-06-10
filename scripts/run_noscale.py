@@ -37,7 +37,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DATA_DIR = "spike_mnist_dataset"
 
 
-def evaluate(model, dataloader, device):
+def evaluate(model, dataloader, device, task_classes=None):
     """Evaluate model accuracy on a dataloader."""
     model.eval()
     total_correct = 0
@@ -48,6 +48,12 @@ def evaluate(model, dataloader, device):
             labels = labels.to(device)
             model.reset()
             out = model(spikes)
+            
+            if task_classes is not None:
+                mask = torch.ones_like(out, dtype=torch.bool)
+                mask[:, task_classes] = False
+                out[mask] = -float("inf")
+                
             preds = out.argmax(dim=1)
             total_correct += (preds == labels).sum().item()
             total_samples += labels.size(0)
@@ -120,10 +126,21 @@ def run_experiment(run_id, epochs, seed, percentile):
     print(f"{'='*40}")
 
     # Set seed for reproducibility
-    torch.manual_seed(seed)
+    import random
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    random.seed(seed)
     np.random.seed(seed)
+    torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        try:
+            torch.use_deterministic_algorithms(True)
+        except Exception:
+            pass
 
     # Load spike-encoded MNIST data
     spike_file = os.path.join(DATA_DIR, "spike_trains_100ts.npy")
@@ -158,47 +175,109 @@ def run_experiment(run_id, epochs, seed, percentile):
 
     history = {
         "full_curve": [],
+        "full_curve_task_il": [],
         "task_b": [],
+        "task_b_task_il": [],
         "eval_all": 0.0,
         "final_task_a": 0.0
     }
 
     # Phase 1: Train on Task A (digits 0-4) with P-factor tracking
     print("--- Phase 1: Training Task A ---")
-    for epoch in range(epochs):
-        model.train()
-        total_correct = 0
-        total_samples = 0
-
-        pbar = tqdm(train_a, desc=f"Task A Epoch {epoch+1}")
-        for s, l in pbar:
-            s, l = s.to(DEVICE), l.to(DEVICE)
-            optimizer.zero_grad()
-            model.reset()
-            out = model(s)
-            loss = criterion(out, l)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-
-            preds = out.argmax(dim=1)
-            total_correct += (preds == l).sum().item()
-            total_samples += l.size(0)
-
-            # P-factors are still updated for engram identification
-            update_p_factor_combined(model, preds, l, alpha_ltp=0.01)
-
-            pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
-
+    
+    ckpt_dir = os.path.join("checkpoints", "MNIST")
+    os.makedirs(ckpt_dir, exist_ok=True)
+    ckpt_path = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epochs}_taskA.pt")
+    
+    start_epoch = 0
+    # Try to find the exact checkpoint, or the highest available previous checkpoint
+    for e in range(epochs, 0, -1):
+        temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{e}_taskA.pt")
+        if os.path.exists(temp_ckpt):
+            print(f"Loading Task A state from checkpoint: {temp_ckpt}")
+            try:
+                checkpoint = torch.load(temp_ckpt, map_location=DEVICE, weights_only=False)
+                if 'optimizer_state_dict' not in checkpoint:
+                    print("Old checkpoint format detected. Ignoring.")
+                    continue
+                model.load_state_dict(checkpoint['model_state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
+                np.random.set_state(checkpoint['np_rng_state'])
+                if torch.cuda.is_available() and 'cuda_rng_state' in checkpoint:
+                    torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu())
+                start_epoch = e
+                break
+            except Exception as e_msg:
+                print(f"Error loading checkpoint: {e_msg}")
+                continue
+            
+    if start_epoch > 0:
         acc = evaluate(model, test_a, DEVICE)
-        history["full_curve"].append(acc)
-        print(f"Epoch {epoch+1} Test Acc: {acc:.2f}%")
+        acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
+        for _ in range(start_epoch):
+            history["full_curve"].append(acc)
+            history["full_curve_task_il"].append(acc_task_il)
+            
+        print(f"Loaded Checkpoint Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
+        if hasattr(model, 'layer1') and hasattr(model.layer1, 'P'):
+            p1 = model.layer1.P
+            print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
+        
+    for epoch in range(start_epoch, epochs):
+            model.train()
+            total_correct = 0
+            total_samples = 0
 
-        p1 = model.layer1.P
-        print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
+            pbar = tqdm(train_a, desc=f"Task A Epoch {epoch+1}")
+            for s, l in pbar:
+                s, l = s.to(DEVICE), l.to(DEVICE)
+                optimizer.zero_grad()
+                model.reset()
+                out = model(s)
+                loss = criterion(out, l)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
 
-    print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile})...")
-    static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile)
+                preds = out.argmax(dim=1)
+                total_correct += (preds == l).sum().item()
+                total_samples += l.size(0)
+
+                # P-factors are still updated for engram identification
+                update_p_factor_combined(model, preds, l, alpha_ltp=0.01)
+
+                pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
+
+            acc = evaluate(model, test_a, DEVICE)
+            history["full_curve"].append(acc)
+            acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
+            history["full_curve_task_il"].append(acc_task_il)
+            print(f"Epoch {epoch+1} Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
+
+            # SAVE EVERY EPOCH WITH FULL STATE
+            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epoch+1}_taskA.pt")
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'torch_rng_state': torch.get_rng_state(),
+                'np_rng_state': np.random.get_state(),
+            }
+            if torch.cuda.is_available():
+                checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
+            torch.save(checkpoint, temp_ckpt)
+
+            p1 = model.layer1.P
+            print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
+
+        print(f"\n[System] Consolidating Memory & Resetting Novices (Percentile {percentile})...")
+        static_masks = generate_static_mask_and_reset(model, threshold_percentile=percentile)
+
+
+
+
+
+
 
     # Phase 2: Train on Task B (digits 5-9) with frozen engram neurons
     print("\n--- Phase 2: Training Task B ---")
@@ -237,12 +316,16 @@ def run_experiment(run_id, epochs, seed, percentile):
 
         # Measure Task A retention
         acc_retention = evaluate(model, test_a, DEVICE)
+        acc_retention_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
         history["full_curve"].append(acc_retention)
-        print(f"Epoch {epoch+1} Task A Retention: {acc_retention:.2f}%")
+        history["full_curve_task_il"].append(acc_retention_task_il)
+        print(f"Epoch {epoch+1} Task A Retention (Class-IL): {acc_retention:.2f}% | (Task-IL): {acc_retention_task_il:.2f}%")
 
         acc_b = evaluate(model, test_b, DEVICE)
+        acc_b_task_il = evaluate(model, test_b, DEVICE, task_classes=[5,6,7,8,9])
         history["task_b"].append(acc_b)
-        print(f"Epoch {epoch+1} Task B Accuracy: {acc_b:.2f}%")
+        history["task_b_task_il"].append(acc_b_task_il)
+        print(f"Epoch {epoch+1} Task B Accuracy (Class-IL): {acc_b:.2f}% | (Task-IL): {acc_b_task_il:.2f}%")
 
     # Final combined evaluation
     acc_all = evaluate(model, test_all, DEVICE)
@@ -264,7 +347,7 @@ if __name__ == "__main__":
     from src.utils import parse_results_file, save_aggregated_results
 
     percentile_int = int(args.percentile * 100)
-    output_dir = f"results/results_epochs_{args.epochs}"
+    output_dir = f"results/SNN/Split-MNIST/epochs_{args.epochs}"
     os.makedirs(output_dir, exist_ok=True)
     results_file = f"{output_dir}/noscale_{percentile_int}.json"
 

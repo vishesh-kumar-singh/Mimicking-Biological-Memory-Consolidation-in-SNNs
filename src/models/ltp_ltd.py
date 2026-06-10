@@ -68,7 +68,7 @@ def update_p_factor_ltp(model, correct_indices, alpha=0.01, p_max=1.0):
     with torch.no_grad():
         # Layer 1: Find neurons that fired for any correct sample
         fired1 = model.layer1_fired[correct_indices]  # [num_correct, hidden_size]
-        neurons_to_update_1 = fired1.any(dim=0)  # [hidden_size] - True if fired for any correct sample
+        neurons_to_update_1 = fired1.any(dim=0)  # [hidden_size]
         model.layer1.P[neurons_to_update_1] += alpha * (p_max - model.layer1.P[neurons_to_update_1])
         
         # Layer 2: Same for output layer
@@ -161,10 +161,8 @@ class SNNLayerLTP_LTD(nn.Module):
         """
         Forward pass with optional P-factor weight modulation.
         
-        If scale_weights is True:
-            W_eff = W * (1 + P)
-        If scale_weights is False:
-            W_eff = W (P-factors still tracked but not used for scaling)
+        This applies the formula: W_eff = W * (1 + P)
+        where P is the plasticity factor modulated by LTP/LTD.
         
         Args:
             input_spikes (Tensor): Binary spike input [batch_size, in_dim]

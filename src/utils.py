@@ -72,6 +72,17 @@ def save_aggregated_results(filepath, histories):
         "final_task_a_std": np.std([h["final_task_a"] for h in histories]),
     }
 
+    # Add Task-IL metrics if any run contains them
+    if any("full_curve_task_il" in h for h in histories):
+        til_fc_mean, til_fc_std = safe_mean_std("full_curve_task_il")
+        avg_history["full_curve_task_il_mean"] = til_fc_mean
+        avg_history["full_curve_task_il_std"] = til_fc_std
+    
+    if any("task_b_task_il" in h for h in histories):
+        til_tb_mean, til_tb_std = safe_mean_std("task_b_task_il")
+        avg_history["task_b_task_il_mean"] = til_tb_mean
+        avg_history["task_b_task_il_std"] = til_tb_std
+
     output_data = {
         "average": avg_history,
         "runs": histories
@@ -79,3 +90,4 @@ def save_aggregated_results(filepath, histories):
 
     with open(filepath, 'w') as f:
         json.dump(output_data, f, indent=4)
+
