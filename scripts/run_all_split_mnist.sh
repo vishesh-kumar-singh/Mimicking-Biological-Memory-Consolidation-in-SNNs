@@ -110,7 +110,7 @@ done
 # -----------------------------------------------
 echo ""
 echo ">>> [BONUS] ENERGY & COMPUTATIONAL COST ANALYSIS"
-for e in 3 5; do
+for e in 1 3 5; do
     echo "--- Energy comparison: epochs=$e ---"
     python -u scripts/analyze_energy.py --epochs $e --compare --seed 42
 done
