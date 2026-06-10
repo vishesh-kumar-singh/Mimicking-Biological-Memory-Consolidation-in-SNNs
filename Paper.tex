@@ -6,6 +6,7 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{algorithm}
+\usepackage{float}
 \usepackage{booktabs}
 \usepackage[colorlinks=true, urlcolor=black, linkcolor=black, citecolor=black]{hyperref}
 
@@ -400,7 +401,7 @@ During the preparation of this work, the author used Gemini in order to refine t
 \end{thebibliography}
 
 
-\appendices
+\appendix
 
 \section{Detailed Experimental Results}
 For completeness, we provide the full breakdown of experimental results across all training durations ($E \in \{1, 2, 3, 4, 5\}$) and consolidation thresholds ($\tau \in [0.4, 0.8]$).
@@ -408,7 +409,7 @@ For completeness, we provide the full breakdown of experimental results across a
 % ================= EPOCH 1 =================
 \subsection{Epoch 1 Results}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 1: P-Factor vs Baselines (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
@@ -419,9 +420,9 @@ For completeness, we provide the full breakdown of experimental results across a
         Fine-Tuning (Baseline) & 0.04\% $\pm$ 0.07 & 95.59\% $\pm$ 1.51 & 46.85\% \\
         ER (Buffer=200) & 89.46\% $\pm$ 2.58 & 95.29\% $\pm$ 0.79 & 92.65\% \\
         \midrule
-        EWC ($\\lambda=10^3$) & 2.13\% $\pm$ 3.57 & 96.15\% $\pm$ 0.64 & 48.40\% \\
-        EWC ($\\lambda=10^5$) & 9.68\% $\pm$ 11.85 & 79.75\% $\pm$ 19.81 & 44.21\% \\
-        EWC ($\\lambda=10^6$) & 24.54\% $\pm$ 5.55 & 25.25\% $\pm$ 21.43 & 24.52\% \\
+        EWC ($\lambda=10^3$) & 2.13\% $\pm$ 3.57 & 96.15\% $\pm$ 0.64 & 48.40\% \\
+        EWC ($\lambda=10^5$) & 9.68\% $\pm$ 11.85 & 79.75\% $\pm$ 19.81 & 44.21\% \\
+        EWC ($\lambda=10^6$) & 24.54\% $\pm$ 5.55 & 25.25\% $\pm$ 21.43 & 24.52\% \\
         \midrule
         SI ($c=1$) & 1.43\% $\pm$ 2.86 & 96.33\% $\pm$ 0.78 & 48.13\% \\
         SI ($c=10^2$) & 25.92\% $\pm$ 15.29 & 94.09\% $\pm$ 1.55 & 59.38\% \\
@@ -438,15 +439,15 @@ For completeness, we provide the full breakdown of experimental results across a
         Random (60\%) & 20.27\% $\pm$ 8.27 & 95.29\% $\pm$ 1.62 & 57.22\% \\
         Random (80\%) & 39.25\% $\pm$ 4.84 & 94.54\% $\pm$ 1.31 & 66.62\% \\
         \midrule
-        \\textbf{{P-Factor $\\tau=0.2$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.4$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.6$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.8$ (Ours)}} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.2$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.4$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.6$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.8$ (Ours)} & -- & -- & -- \\
         \bottomrule
     \end{tabular}}
 \end{table}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 1: Ablation Studies (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
@@ -482,7 +483,7 @@ For completeness, we provide the full breakdown of experimental results across a
 % ================= EPOCH 3 =================
 \subsection{Epoch 3 Results}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 3: P-Factor vs Baselines (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
@@ -493,9 +494,9 @@ For completeness, we provide the full breakdown of experimental results across a
         Fine-Tuning (Baseline) & 0.00\% $\pm$ 0.00 & 95.60\% $\pm$ 1.02 & 48.09\% \\
         ER (Buffer=200) & 90.70\% $\pm$ 1.23 & 95.38\% $\pm$ 0.70 & 94.24\% \\
         \midrule
-        EWC ($\\lambda=10^3$) & 0.59\% $\pm$ 0.93 & 95.51\% $\pm$ 0.60 & 48.25\% \\
-        EWC ($\\lambda=10^5$) & 15.89\% $\pm$ 7.48 & 34.10\% $\pm$ 36.46 & 32.51\% \\
-        EWC ($\\lambda=10^6$) & 23.62\% $\pm$ 3.63 & 4.11\% $\pm$ 8.21 & 15.54\% \\
+        EWC ($\lambda=10^3$) & 0.59\% $\pm$ 0.93 & 95.51\% $\pm$ 0.60 & 48.25\% \\
+        EWC ($\lambda=10^5$) & 15.89\% $\pm$ 7.48 & 34.10\% $\pm$ 36.46 & 32.51\% \\
+        EWC ($\lambda=10^6$) & 23.62\% $\pm$ 3.63 & 4.11\% $\pm$ 8.21 & 15.54\% \\
         \midrule
         SI ($c=1$) & 7.60\% $\pm$ 4.22 & 96.11\% $\pm$ 0.99 & 51.85\% \\
         SI ($c=10^2$) & 18.55\% $\pm$ 8.29 & 94.53\% $\pm$ 0.91 & 56.49\% \\
@@ -512,15 +513,15 @@ For completeness, we provide the full breakdown of experimental results across a
         Random (60\%) & -- & -- & -- \\
         Random (80\%) & -- & -- & -- \\
         \midrule
-        \\textbf{{P-Factor $\\tau=0.2$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.4$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.6$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.8$ (Ours)}} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.2$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.4$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.6$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.8$ (Ours)} & -- & -- & -- \\
         \bottomrule
     \end{tabular}}
 \end{table}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 3: Ablation Studies (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
@@ -556,7 +557,7 @@ For completeness, we provide the full breakdown of experimental results across a
 % ================= EPOCH 5 =================
 \subsection{Epoch 5 Results}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 5: P-Factor vs Baselines (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
@@ -567,9 +568,9 @@ For completeness, we provide the full breakdown of experimental results across a
         Fine-Tuning (Baseline) & 0.00\% $\pm$ 0.00 & 95.89\% $\pm$ 0.98 & 48.09\% \\
         ER (Buffer=200) & 90.93\% $\pm$ 0.93 & 93.93\% $\pm$ 1.31 & 94.42\% \\
         \midrule
-        EWC ($\\lambda=10^3$) & 3.71\% $\pm$ 4.59 & 95.75\% $\pm$ 1.21 & 50.14\% \\
-        EWC ($\\lambda=10^5$) & -- & -- & -- \\
-        EWC ($\\lambda=10^6$) & -- & -- & -- \\
+        EWC ($\lambda=10^3$) & 3.71\% $\pm$ 4.59 & 95.75\% $\pm$ 1.21 & 50.14\% \\
+        EWC ($\lambda=10^5$) & 14.79\% $\pm$ 0.00 & 71.91\% $\pm$ 0.00 & 56.05\% \\
+        EWC ($\lambda=10^6$) & -- & -- & -- \\
         \midrule
         SI ($c=1$) & -- & -- & -- \\
         SI ($c=10^2$) & -- & -- & -- \\
@@ -586,15 +587,15 @@ For completeness, we provide the full breakdown of experimental results across a
         Random (60\%) & -- & -- & -- \\
         Random (80\%) & -- & -- & -- \\
         \midrule
-        \\textbf{{P-Factor $\\tau=0.2$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.4$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.6$ (Ours)}} & -- & -- & -- \\
-        \\textbf{{P-Factor $\\tau=0.8$ (Ours)}} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.2$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.4$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.6$ (Ours)} & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.8$ (Ours)} & -- & -- & -- \\
         \bottomrule
     \end{tabular}}
 \end{table}
 
-\begin{table}[H]
+\begin{table}[htbp]
     \centering
     \caption{\textbf{Epoch 5: Ablation Studies (Mean $\pm$ Std)}.}
     \resizebox{\columnwidth}{!}{
