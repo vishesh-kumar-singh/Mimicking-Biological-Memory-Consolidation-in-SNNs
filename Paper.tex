@@ -329,24 +329,83 @@ At the boundary between tasks, we simulate a period of offline consolidation. Th
 \end{table}
 
 \subsection{Energy and Computational Cost Analysis}
-% [Placeholder: Text discussing the O(N) vs O(W) memory overhead and energy efficiency extracted from analyze_energy.py]
 
+In Spiking Neural Networks (SNNs), energy efficiency is primarily derived from activation sparsity. Unlike traditional Artificial Neural Networks (ANNs) that perform dense, high-precision floating-point Multiply-Accumulate (MAC) operations for every neuron connection at every forward pass, SNNs utilize simple integer Accumulate (AC) operations---referred to as Synaptic Operations (SynOps)---only when a neuron emits a discrete spike. In standard neuromorphic hardware benchmarks, a 32-bit MAC operation consumes approximately $3.1\text{ pJ}$, whereas a sparse AC operation consumes only $\approx 0.1\text{ pJ}$. The goal of our P-Factor consolidation method is to prevent catastrophic forgetting while preserving this inherent sparsity, keeping the total SynOps computationally cheap compared to baseline continual learning models that often devolve into dense, chaotic firing patterns when adapting to new tasks.
+
+\subsubsection{Energy Analysis: Split-MNIST}
 \begin{table}[H]
-    \caption{Computational Overhead and Energy Efficiency Comparison}
+    \caption{Split-MNIST: Energy Efficiency and Sparsity Comparison (Epoch 1)}
+    \begin{center}
+    \resizebox{\columnwidth}{!}{
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Method} & \textbf{L1 Sparsity (\%)} & \textbf{SynOps / Sample} & \textbf{Est. Energy ($\mu$J)} \\
+        \midrule
+        Standard ANN (Dense) & 0.0\% & -- (MACs: 813K) & $\sim 2.52$ \\
+        SNN Baseline (Fine-Tuning) & -- & -- & -- \\
+        EWC ($\lambda=10^6$) & -- & -- & -- \\
+        SI ($c=10^6$) & -- & -- & -- \\
+        PackNet (80\%) & -- & -- & -- \\
+        \textbf{P-Factor $\tau=0.4$ (Ours)} & 91.61\% & 10,577,963 & $1.05$ \\
+        \bottomrule
+    \end{tabular}}
+    \label{tab:energy_mnist}
+    \end{center}
+\end{table}
+
+\subsubsection{Energy Analysis: Split-N-MNIST}
+\begin{table}[H]
+    \caption{Split-N-MNIST: Energy Efficiency and Sparsity Comparison}
+    \begin{center}
+    \resizebox{\columnwidth}{!}{
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Method} & \textbf{L1 Sparsity (\%)} & \textbf{SynOps / Sample} & \textbf{Est. Energy ($\mu$J)} \\
+        \midrule
+        Standard ANN (Dense) & 0.0\% & -- & -- \\
+        SNN Baseline (Fine-Tuning) & -- & -- & -- \\
+        \textbf{P-Factor (Ours)} & -- & -- & -- \\
+        \bottomrule
+    \end{tabular}}
+    \label{tab:energy_nmnist}
+    \end{center}
+\end{table}
+
+\subsubsection{Energy Analysis: 5-Split-Fashion-MNIST}
+\begin{table}[H]
+    \caption{5-Split-Fashion-MNIST: Energy Efficiency and Sparsity Comparison}
+    \begin{center}
+    \resizebox{\columnwidth}{!}{
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Method} & \textbf{L1 Sparsity (\%)} & \textbf{SynOps / Sample} & \textbf{Est. Energy ($\mu$J)} \\
+        \midrule
+        Standard ANN (Dense) & 0.0\% & -- & -- \\
+        SNN Baseline (Fine-Tuning) & -- & -- & -- \\
+        \textbf{P-Factor (Ours)} & -- & -- & -- \\
+        \bottomrule
+    \end{tabular}}
+    \label{tab:energy_fmnist}
+    \end{center}
+\end{table}
+
+\subsubsection{Memory and Computational Complexity}
+\begin{table}[H]
+    \caption{Computational Overhead and Method Complexity Comparison}
     \begin{center}
     \resizebox{\columnwidth}{!}{
     \begin{tabular}{lccc}
         \toprule
-        \textbf{Method} & \textbf{Memory Overhead} & \textbf{Relative Energy Cost} & \textbf{Complexity} \\
+        \textbf{Method} & \textbf{Memory Overhead} & \textbf{Compute Overhead} & \textbf{Complexity} \\
         \midrule
-        Fine-Tuning & None & 1.0x & $O(1)$ \\
-        ER (Buffer=200) & High (Raw Data) & -- & $O(D_{mem})$ \\
-        EWC & High (Float Matrix) & -- & $O(W)$ \\
-        SI & High (Float Matrix) & -- & $O(W)$ \\
-        \textbf{P-Factor} & \textbf{Low (Binary Mask)} & \textbf{--} & \textbf{$O(N)$} \\
+        Fine-Tuning & None & None & $O(1)$ \\
+        ER (Buffer=200) & High (Raw Data) & Forward/Backward on Buffer & $O(D_{mem})$ \\
+        EWC & High (Float Matrix) & Hessian/Fisher Matrix Calc. & $O(W)$ \\
+        SI & High (Float Matrix) & Path Integral Accumulation & $O(W)$ \\
+        \textbf{P-Factor} & \textbf{Low (Float Vector)} & \textbf{Negligible (Thresholding)} & \textbf{$O(N)$} \\
         \bottomrule
     \end{tabular}}
-    \label{tab:energy_analysis}
+    \label{tab:energy_analysis_complexity}
     \end{center}
 \end{table}
 
@@ -399,14 +458,16 @@ During the preparation of this work, the author used Gemini in order to refine t
 
 \end{thebibliography}
 
-
+\newpage
 \appendix
 
 \section{Detailed Experimental Results}
-For completeness, we provide the full breakdown of experimental results across all training durations ($E \in \{1, 2, 3, 4, 5\}$) and consolidation thresholds ($\tau \in [0.4, 0.8]$).
+For completeness, we provide the full breakdown of experimental results across all training durations ($E \in \{1, 3, 5\}$) and consolidation thresholds ($\tau \in \{0.2, 0.4, 0.6, 0.8\}$). This longitudinal view is critical for understanding the temporal fragility of SNNs and the onset of plasticity creep during extended adaptation.
 
+\subsection{Experimental Results for Split-MNIST}
+The following tables detail the progression of the network's stability and plasticity. By evaluating the models at early (Epoch 1), intermediate (Epoch 3), and late (Epoch 5) stages of Task B training, we expose the difference between temporary "warm start" retention and true mathematical consolidation.
 % ================= EPOCH 1 =================
-\subsection{Epoch 1 Results}
+\subsubsection{Epoch 1 Results}
 
 \begin{table}[H]
     \caption{\textbf{Epoch 1: P-Factor vs Baselines (Mean $\pm$ Std)}.}
@@ -482,7 +543,7 @@ For completeness, we provide the full breakdown of experimental results across a
 \end{table}
 
 % ================= EPOCH 3 =================
-\subsection{Epoch 3 Results}
+\subsubsection{Epoch 3 Results}
 
 \begin{table}[H]
     \caption{\textbf{Epoch 3: P-Factor vs Baselines (Mean $\pm$ Std)}.}
@@ -558,7 +619,7 @@ For completeness, we provide the full breakdown of experimental results across a
 \end{table}
 
 % ================= EPOCH 5 =================
-\subsection{Epoch 5 Results}
+\subsubsection{Epoch 5 Results}
 
 \begin{table}[H]
     \caption{\textbf{Epoch 5: P-Factor vs Baselines (Mean $\pm$ Std)}.}
@@ -632,5 +693,15 @@ For completeness, we provide the full breakdown of experimental results across a
     \end{tabular}}
     \end{center}
 \end{table}
+
+\subsection{Experimental results for Split-N-MNIST}
+
+
+\subsection{Experimental results for 5-Split-Fashion-MNIST}
+
+
+\subsection{Results for CIFAR-10}
+
+
 
 \end{document}
