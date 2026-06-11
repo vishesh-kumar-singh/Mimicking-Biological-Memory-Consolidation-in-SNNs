@@ -155,7 +155,7 @@ def generate_static_mask_and_reset(model, threshold_percentile=0.7):
     return masks
 
 
-def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnist=False):
+def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnist=False, alpha_ltp=0.01, alpha_ltd=0.01):
     """
     Run a single continual learning experiment with P-factor freezing.
     
@@ -166,6 +166,8 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
         percentile (float): Fraction of neurons to freeze
         data_dir (str): Directory containing dataset
         is_nmnist (bool): Whether to use NMNISTDatasetWrapper
+        alpha_ltp (float): LTP learning rate
+        alpha_ltd (float): LTD learning rate
         
     Returns:
         dict: Experiment results containing:
@@ -247,7 +249,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     dataset_name = "NMNIST" if is_nmnist else "MNIST"
     ckpt_dir = os.path.join("checkpoints", dataset_name)
     os.makedirs(ckpt_dir, exist_ok=True)
-    ckpt_path = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epochs}_taskA.pt")
+    ckpt_path = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epochs}_ltp{alpha_ltp}_ltd{alpha_ltd}_taskA.pt")
     
     if os.path.exists(ckpt_path):
         print(f"Loading Task A state from checkpoint: {ckpt_path}")
@@ -266,7 +268,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     else:
         start_epoch = 0
         for e in range(epochs, 0, -1):
-            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{e}_taskA.pt")
+            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{e}_ltp{alpha_ltp}_ltd{alpha_ltd}_taskA.pt")
             if os.path.exists(temp_ckpt):
                 print(f"Loading Task A state from checkpoint: {temp_ckpt}")
                 try:
@@ -321,7 +323,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
                 total_samples += l.size(0)
                 
                 # Apply LTP/LTD P-factor updates based on prediction correctness
-                update_p_factor_combined(model, preds, l, alpha_ltp=0.01)
+                update_p_factor_combined(model, preds, l, alpha_ltp=alpha_ltp, alpha_ltd=alpha_ltd)
                 
                 pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
                     
@@ -337,7 +339,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
             print(f"Layer 1 P > 0.5: {(p1>0.5).float().mean()*100:.1f}%")
     
             # SAVE EVERY EPOCH WITH FULL STATE
-            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epoch+1}_taskA.pt")
+            temp_ckpt = os.path.join(ckpt_dir, f"seed_{seed}_epochs_{epoch+1}_ltp{alpha_ltp}_ltd{alpha_ltd}_taskA.pt")
             checkpoint = {
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
@@ -394,6 +396,9 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
             total_correct += (preds == l).sum().item()
             total_samples += l.size(0)
             
+            # Apply LTP/LTD P-factor updates based on prediction correctness during Task B as well
+            update_p_factor_combined(model, preds, l, alpha_ltp=alpha_ltp, alpha_ltd=alpha_ltd, static_masks=static_masks)
+            
             pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
             
         # Evaluate Task A retention (catastrophic forgetting metric)
@@ -427,12 +432,14 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
 # =============================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="P-Factor Freezing Experiment")
-    parser.add_argument("--runs", type=int, default=1, help="Number of runs with different seeds")
+    parser.add_argument("--runs", type=int, default=5, help="Number of runs with different seeds")
     parser.add_argument("--epochs", type=int, default=5, help="Epochs per task")
     parser.add_argument("--percentile", type=float, default=0.7, help="Freezing percentile (0.7 = 70%)")
     parser.add_argument("--data_dir", type=str, default="spike_mnist_dataset", help="Directory with spike data")
     parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Name for results directory")
     parser.add_argument("--is_nmnist", action="store_true", help="Use NMNISTDatasetWrapper")
+    parser.add_argument("--alpha_ltp", type=float, default=0.01, help="LTP learning rate")
+    parser.add_argument("--alpha_ltd", type=float, default=0.01, help="LTD learning rate")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results
@@ -473,7 +480,7 @@ if __name__ == "__main__":
     
     while runs_completed < runs_needed:
         if current_seed not in existing_seeds:
-            hist = run_experiment(len(histories), args.epochs, current_seed, args.percentile, data_dir=args.data_dir, is_nmnist=args.is_nmnist)
+            hist = run_experiment(len(histories), args.epochs, current_seed, args.percentile, data_dir=args.data_dir, is_nmnist=args.is_nmnist, alpha_ltp=args.alpha_ltp, alpha_ltd=args.alpha_ltd)
             if hist:
                 hist['seed'] = current_seed
                 histories.append(hist)

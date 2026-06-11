@@ -14,7 +14,7 @@ PACKNET_PERCENTILES=(0.2 0.4 0.6 0.8) # Fraction of network to freeze
 for IS_NMNIST in "" "--is_nmnist"; do
     DATASET_NAME="Split-MNIST"
     if [ "$IS_NMNIST" = "--is_nmnist" ]; then
-        DATASET_NAME="NMNIST"
+        DATASET_NAME="Split-NMNIST"
     fi
     
     echo "====================================================================="

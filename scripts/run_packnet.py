@@ -293,6 +293,8 @@ if __name__ == "__main__":
     parser.add_argument("--percentile", type=float, default=0.8, help="Fraction of top magnitude weights to freeze")
     parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Dataset name")
     parser.add_argument("--is_nmnist", action="store_true", help="Use NMNIST")
+    parser.add_argument("--alpha_ltp", type=float, default=0.01, help="LTP learning rate (ignored, for compatibility)")
+    parser.add_argument("--alpha_ltd", type=float, default=0.01, help="LTD learning rate (ignored, for compatibility)")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results

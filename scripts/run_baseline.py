@@ -63,7 +63,7 @@ def evaluate(model, dataloader, device, task_classes=None):
     return total_correct / total_samples * 100 if total_samples > 0 else 0
 
 
-def run_experiment(run_id, epochs, seed):
+def run_experiment(run_id, epochs, seed, data_dir=DATA_DIR, is_nmnist=False):
     """
     Run a single baseline continual learning experiment.
     
@@ -74,6 +74,8 @@ def run_experiment(run_id, epochs, seed):
         run_id (int): Run identifier for logging
         epochs (int): Training epochs per task
         seed (int): Random seed for reproducibility
+        data_dir (str): Directory containing dataset
+        is_nmnist (bool): Whether to use NMNISTDatasetWrapper
         
     Returns:
         dict: History with full_curve, task_b, eval_all, final_task_a
@@ -99,17 +101,23 @@ def run_experiment(run_id, epochs, seed):
         except Exception:
             pass
     
-    # Load spike-encoded MNIST data
-    spike_file = os.path.join(DATA_DIR, "spike_trains_100ts.npy")
-    label_file = os.path.join(DATA_DIR, "labels.npy")
-    if not os.path.exists(spike_file):
-        print("Data not found.")
-        return None
-
-    # Continual learning datasets: Task A (0-4), Task B (5-9), All (0-9)
-    dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
-    dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
-    dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
+    # Load Data
+    if is_nmnist:
+        from src.dataset import NMNISTDatasetWrapper
+        dataset_a = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=[0,1,2,3,4])
+        dataset_b = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=[5,6,7,8,9])
+        dataset_all = NMNISTDatasetWrapper(save_to=data_dir, train=True, target_digits=list(range(10)))
+        input_dim = 2312
+    else:
+        spike_file = os.path.join(data_dir, "spike_trains_100ts.npy")
+        label_file = os.path.join(data_dir, "labels.npy")
+        if not os.path.exists(spike_file):
+            print("Data not found.")
+            return None
+        dataset_a = SpikeMNISTDataset(spike_file, label_file, target_digits=[0,1,2,3,4])
+        dataset_b = SpikeMNISTDataset(spike_file, label_file, target_digits=[5,6,7,8,9])
+        dataset_all = SpikeMNISTDataset(spike_file, label_file, target_digits=list(range(10)))
+        input_dim = 784
     
     def get_loader(ds):
         train_size = int(0.8 * len(ds))
@@ -121,7 +129,7 @@ def run_experiment(run_id, epochs, seed):
     _, test_all = get_loader(dataset_all)
     
     # Baseline SNN (no P-factors, no freezing)
-    model = SNNModelBaseline(hidden_size=HIDDEN_SIZE).to(DEVICE)
+    model = SNNModelBaseline(input_size=input_dim, hidden_size=HIDDEN_SIZE).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -137,7 +145,8 @@ def run_experiment(run_id, epochs, seed):
     # Phase 1: Train on Task A (digits 0-4)
     print("--- Phase 1: Training Task A ---")
     
-    ckpt_dir = os.path.join("checkpoints", "MNIST")
+    dataset_prefix = "NMNIST" if is_nmnist else "MNIST"
+    ckpt_dir = os.path.join("checkpoints", dataset_prefix)
     os.makedirs(ckpt_dir, exist_ok=True)
     ckpt_path = os.path.join(ckpt_dir, f"baseline_seed_{seed}_epochs_{epochs}_taskA.pt")
     
@@ -272,12 +281,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Baseline Continual Learning Experiment")
     parser.add_argument("--runs", type=int, default=1, help="Number of runs with different seeds")
     parser.add_argument("--epochs", type=int, default=5, help="Epochs per task")
+    parser.add_argument("--data_dir", type=str, default="spike_mnist_dataset", help="Directory with spike data")
+    parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Name for results directory")
+    parser.add_argument("--is_nmnist", action="store_true", help="Use NMNISTDatasetWrapper")
+    parser.add_argument("--alpha_ltp", type=float, default=0.01, help="LTP learning rate (ignored, for compatibility)")
+    parser.add_argument("--alpha_ltd", type=float, default=0.01, help="LTD learning rate (ignored, for compatibility)")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results
     
     # Output path
-    results_file = f"results/SNN/Split-MNIST/epochs_{args.epochs}/cl_baseline.json"
+    results_file = f"results/SNN/{args.dataset_name}/epochs_{args.epochs}/cl_baseline.json"
     os.makedirs(os.path.dirname(results_file), exist_ok=True)
     
     # Check for existing results (idempotency)
@@ -309,7 +323,7 @@ if __name__ == "__main__":
     
     while runs_completed < runs_needed:
         if current_seed not in existing_seeds:
-            hist = run_experiment(len(histories), args.epochs, current_seed)
+            hist = run_experiment(len(histories), args.epochs, current_seed, data_dir=args.data_dir, is_nmnist=args.is_nmnist)
             if hist:
                 hist['seed'] = current_seed
                 histories.append(hist)

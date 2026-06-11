@@ -227,7 +227,7 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir=DATA_DIR, is_nmnis
     _, test_all = get_loader(dataset_all)
     
     # Initialize LTP/LTD SNN model
-    model = SNNModelLTP_LTD(input_size=input_dim, hidden_size=HIDDEN_SIZE, scale_weights=False).to(DEVICE)
+    model = SNNModelLTP_LTD(input_size=input_dim, hidden_size=HIDDEN_SIZE).to(DEVICE)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -443,12 +443,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results
-    
+
     # Setup output path
     percentile_int = int(args.percentile * 100)
-    output_dir = f"results/SNN/{args.dataset_name}/epochs_{args.epochs}"
+    output_dir = f"results/exp/{args.dataset_name}/epochs_{args.epochs}"
     os.makedirs(output_dir, exist_ok=True)
-    results_file = f"{output_dir}/noscale_{percentile_int}.json"
+    results_file = f"{output_dir}/freezing_phaseB_pfactor_{percentile_int}_ltp{args.alpha_ltp}_ltd{args.alpha_ltd}.json"
     
     # Load existing results (supports resuming interrupted experiments)
     histories = parse_results_file(results_file)

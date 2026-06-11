@@ -43,7 +43,7 @@ import torch.nn as nn
 from .common import LIFNeuron
 
 
-def update_p_factor_ltp(model, correct_indices, alpha=0.01, p_max=1.0):
+def update_p_factor_ltp(model, correct_indices, alpha=0.01, p_max=1.0, static_masks=None):
     """
     Apply Long-Term Potentiation to neurons involved in correct predictions.
     
@@ -60,20 +60,25 @@ def update_p_factor_ltp(model, correct_indices, alpha=0.01, p_max=1.0):
         model (SNNModelLTP_LTD): The model containing P-factors
         correct_indices (Tensor): Batch indices of correctly predicted samples
         alpha (float): Learning rate for P-factor updates
-        p_max (float): Maximum P-factor value (saturation limit)
+        p_max (float): Maximum P-factor value (ceiling limit)
+        static_masks (dict, optional): Masks indicating plastic (1) vs frozen (0) neurons.
     """
     if len(correct_indices) == 0:
         return
 
     with torch.no_grad():
         # Layer 1: Find neurons that fired for any correct sample
-        fired1 = model.layer1_fired[correct_indices]  # [num_correct, hidden_size]
-        neurons_to_update_1 = fired1.any(dim=0)  # [hidden_size]
+        fired1 = model.layer1_fired[correct_indices]
+        neurons_to_update_1 = fired1.any(dim=0)
+        if static_masks is not None and 'layer1' in static_masks:
+            neurons_to_update_1 = neurons_to_update_1 & static_masks['layer1'].squeeze().bool()
         model.layer1.P[neurons_to_update_1] += alpha * (p_max - model.layer1.P[neurons_to_update_1])
         
         # Layer 2: Same for output layer
         fired2 = model.layer2_fired[correct_indices]
         neurons_to_update_2 = fired2.any(dim=0)
+        if static_masks is not None and 'layer2' in static_masks:
+            neurons_to_update_2 = neurons_to_update_2 & static_masks['layer2'].squeeze().bool()
         model.layer2.P[neurons_to_update_2] += alpha * (p_max - model.layer2.P[neurons_to_update_2])
         
         # Clamp to ensure bounds (safety measure)
@@ -81,7 +86,7 @@ def update_p_factor_ltp(model, correct_indices, alpha=0.01, p_max=1.0):
         model.layer2.P.clamp_(max=p_max)
 
 
-def update_p_factor_ltd(model, wrong_indices, alpha=0.01, p_min=-1.0):
+def update_p_factor_ltd(model, wrong_indices, alpha=0.01, p_min=-1.0, static_masks=None):
     """
     Apply Long-Term Depression to neurons involved in incorrect predictions.
     
@@ -100,6 +105,7 @@ def update_p_factor_ltd(model, wrong_indices, alpha=0.01, p_min=-1.0):
         wrong_indices (Tensor): Batch indices of incorrectly predicted samples
         alpha (float): Learning rate for P-factor updates
         p_min (float): Minimum P-factor value (floor limit)
+        static_masks (dict, optional): Masks indicating plastic (1) vs frozen (0) neurons.
     """
     if len(wrong_indices) == 0:
         return
@@ -108,11 +114,15 @@ def update_p_factor_ltd(model, wrong_indices, alpha=0.01, p_min=-1.0):
         # Layer 1: Find neurons that fired for any wrong sample
         fired1 = model.layer1_fired[wrong_indices]
         neurons_to_update_1 = fired1.any(dim=0)
+        if static_masks is not None and 'layer1' in static_masks:
+            neurons_to_update_1 = neurons_to_update_1 & static_masks['layer1'].squeeze().bool()
         model.layer1.P[neurons_to_update_1] -= alpha
         
         # Layer 2: Same for output layer
         fired2 = model.layer2_fired[wrong_indices]
         neurons_to_update_2 = fired2.any(dim=0)
+        if static_masks is not None and 'layer2' in static_masks:
+            neurons_to_update_2 = neurons_to_update_2 & static_masks['layer2'].squeeze().bool()
         model.layer2.P[neurons_to_update_2] -= alpha
         
         # Clamp to ensure bounds (prevent unbounded decay)
@@ -266,7 +276,7 @@ class SNNModelLTP_LTD(nn.Module):
         return output_spike_count
 
 
-def update_p_factor_combined(model, preds, labels, alpha_ltp=0.01, alpha_ltd=0.01, p_max=1.0):
+def update_p_factor_combined(model, preds, labels, alpha_ltp=0.01, alpha_ltd=0.01, p_max=1.0, static_masks=None):
     """
     Convenience function to apply both LTP and LTD in a single call.
     
@@ -281,6 +291,7 @@ def update_p_factor_combined(model, preds, labels, alpha_ltp=0.01, alpha_ltd=0.0
         alpha_ltp (float): Learning rate for LTP
         alpha_ltd (float): Learning rate for LTD
         p_max (float): Maximum P-factor value
+        static_masks (dict, optional): Masks indicating plastic (1) vs frozen (0) neurons.
     """
     # Separate correct and incorrect predictions
     correct_mask = (preds == labels)
@@ -291,8 +302,8 @@ def update_p_factor_combined(model, preds, labels, alpha_ltp=0.01, alpha_ltd=0.0
     
     # Apply LTP to neurons that contributed to correct predictions
     if len(correct_indices) > 0:
-        update_p_factor_ltp(model, correct_indices, alpha=alpha_ltp, p_max=p_max)
+        update_p_factor_ltp(model, correct_indices, alpha=alpha_ltp, p_max=p_max, static_masks=static_masks)
         
     # Apply LTD to neurons that contributed to incorrect predictions
     if len(wrong_indices) > 0:
-        update_p_factor_ltd(model, wrong_indices, alpha=alpha_ltd)
+        update_p_factor_ltd(model, wrong_indices, alpha=alpha_ltd, static_masks=static_masks)

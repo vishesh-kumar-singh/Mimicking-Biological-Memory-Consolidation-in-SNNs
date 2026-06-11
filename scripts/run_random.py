@@ -172,14 +172,54 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir="spike_mnist_datas
 
     history = {
         "full_curve": [],
+        "full_curve_task_il": [],
         "task_b": [],
+        "task_b_task_il": [],
         "eval_all": 0.0,
         "final_task_a": 0.0
     }
 
     # Phase 1: Train Task A (no P-factor updates)
     print("--- Phase 1: Training Task A ---")
-    for epoch in range(epochs):
+    
+    dataset_prefix = "NMNIST" if is_nmnist else "MNIST"
+    ckpt_dir = os.path.join("checkpoints", dataset_prefix)
+    os.makedirs(ckpt_dir, exist_ok=True)
+    ckpt_path = os.path.join(ckpt_dir, f"random_seed_{seed}_epochs_{epochs}_taskA.pt")
+    
+    start_epoch = 0
+    # Try to find the exact checkpoint, or the highest available previous checkpoint
+    for e in range(epochs, 0, -1):
+        temp_ckpt = os.path.join(ckpt_dir, f"random_seed_{seed}_epochs_{e}_taskA.pt")
+        if os.path.exists(temp_ckpt):
+            print(f"Loading Task A state from checkpoint: {temp_ckpt}")
+            try:
+                checkpoint = torch.load(temp_ckpt, map_location=DEVICE, weights_only=False)
+                if 'optimizer_state_dict' not in checkpoint:
+                    print("Old checkpoint format detected. Ignoring.")
+                    continue
+                model.load_state_dict(checkpoint['model_state_dict'])
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                torch.set_rng_state(checkpoint['torch_rng_state'].cpu())
+                np.random.set_state(checkpoint['np_rng_state'])
+                if torch.cuda.is_available() and 'cuda_rng_state' in checkpoint:
+                    torch.cuda.set_rng_state(checkpoint['cuda_rng_state'].cpu())
+                start_epoch = e
+                break
+            except Exception as e_msg:
+                print(f"Error loading checkpoint: {e_msg}")
+                continue
+            
+    if start_epoch > 0:
+        acc = evaluate(model, test_a, DEVICE)
+        acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
+        for _ in range(start_epoch):
+            history["full_curve"].append(acc)
+            history["full_curve_task_il"].append(acc_task_il)
+            
+        print(f"Loaded Checkpoint Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
+
+    for epoch in range(start_epoch, epochs):
         model.train()
         total_correct = 0
         total_samples = 0
@@ -204,8 +244,22 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir="spike_mnist_datas
             pbar.set_postfix({"Loss": loss.item(), "Acc": total_correct/total_samples})
                 
         acc = evaluate(model, test_a, DEVICE)
+        acc_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
         history["full_curve"].append(acc)
-        print(f"Epoch {epoch+1} Test Acc: {acc:.2f}%")
+        history["full_curve_task_il"].append(acc_task_il)
+        print(f"Epoch {epoch+1} Test Acc (Class-IL): {acc:.2f}% | (Task-IL): {acc_task_il:.2f}%")
+        
+        # SAVE EVERY EPOCH WITH FULL STATE
+        temp_ckpt = os.path.join(ckpt_dir, f"random_seed_{seed}_epochs_{epoch+1}_taskA.pt")
+        checkpoint = {
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'torch_rng_state': torch.get_rng_state(),
+            'np_rng_state': np.random.get_state(),
+        }
+        if torch.cuda.is_available():
+            checkpoint['cuda_rng_state'] = torch.cuda.get_rng_state()
+        torch.save(checkpoint, temp_ckpt)
 
     # Phase 2: Random Freezing & Task B
     print(f"\n[System] Applying Random Freezing (Percentile {percentile})...")
@@ -246,12 +300,16 @@ def run_experiment(run_id, epochs, seed, percentile, data_dir="spike_mnist_datas
             
         # Evaluate retention and learning
         acc_retention = evaluate(model, test_a, DEVICE)
+        acc_retention_task_il = evaluate(model, test_a, DEVICE, task_classes=[0,1,2,3,4])
         history["full_curve"].append(acc_retention)
-        print(f"Epoch {epoch+1} Task A Retention: {acc_retention:.2f}%")
-
+        history["full_curve_task_il"].append(acc_retention_task_il)
+        print(f"Epoch {epoch+1} Task A Retention (Class-IL): {acc_retention:.2f}% | (Task-IL): {acc_retention_task_il:.2f}%")
+        
         acc_b = evaluate(model, test_b, DEVICE)
+        acc_b_task_il = evaluate(model, test_b, DEVICE, task_classes=[5,6,7,8,9])
         history["task_b"].append(acc_b)
-        print(f"Epoch {epoch+1} Task B Accuracy: {acc_b:.2f}%")
+        history["task_b_task_il"].append(acc_b_task_il)
+        print(f"Epoch {epoch+1} Task B Accuracy (Class-IL): {acc_b:.2f}% | (Task-IL): {acc_b_task_il:.2f}%")
         
     # Final Evaluation
     acc_all = evaluate(model, test_all, DEVICE)
@@ -271,6 +329,8 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="spike_mnist_dataset", help="Directory with spike data")
     parser.add_argument("--dataset_name", type=str, default="Split-MNIST", help="Name for results directory")
     parser.add_argument("--is_nmnist", action="store_true", help="Use NMNISTDatasetWrapper")
+    parser.add_argument("--alpha_ltp", type=float, default=0.01, help="LTP learning rate (ignored, for compatibility)")
+    parser.add_argument("--alpha_ltd", type=float, default=0.01, help="LTD learning rate (ignored, for compatibility)")
     args = parser.parse_args()
     
     from src.utils import load_legacy_json, parse_results_file, save_aggregated_results

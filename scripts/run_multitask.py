@@ -225,7 +225,9 @@ def run_experiment(run_id, epochs, seed, percentile, hidden_size=1024, checkpoin
         "eval_all": final_avg,
         "final_task_a": acc_matrix[-1][0] if acc_matrix else 0,
         "full_curve": [],
-        "task_b": []
+        "full_curve_task_il": [],
+        "task_b": [],
+        "task_b_task_il": []
     }
     
     return history

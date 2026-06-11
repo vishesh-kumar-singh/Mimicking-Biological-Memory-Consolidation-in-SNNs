@@ -13,9 +13,11 @@ As per suggestions from reviewers at Neurocomputing journal, we need to cover th
 
 
 4. **Slight Wordings changes:** Reference--"The introduction states that "the important weights for previous tasks are altered" during new learning, implying an active mechanism targeting important weights. In fact, gradient descent updates weights indiscriminately based on the new task's loss, without considering their importance to previous tasks. This imprecise anthropomorphic wording misrepresents the mechanism of catastrophic forgetting."
+    Resolution: Update in paper
 
 
 5. **Need to improve Benchmarks and Continual Splits**: Reference--"The experimental results are mainly based on Split-MNIST, which is a relatively small and simple benchmark. Although Split-MNIST is useful as a preliminary proof of concept, it is not sufficient to demonstrate the generality and robustness of the proposed method for continual learning in SNNs. The authors should evaluate the method on more challenging datasets and task sequences, such as CIFAR-10/100, or other neuromorphic/event-based benchmarks. Testing on longer task sequences, rather than only two tasks, would also be important to show whether the proposed consolidation mechanism scales to realistic continual learning scenarios."
+    Resolution: Implemented NMNIST dataset and will be doing 5 split NMNIST.
 
 
 6. **Baselines Comparison**: Reference--"The current experiments compare the proposed method mainly with fine-tuning and internal ablation baselines such as random consolidation and fixed-index consolidation. These comparisons show that the P-Factor selection strategy is useful, but they do not establish the competitiveness of the method against existing SNN continual learning approaches. The authors should include quantitative comparisons with representative SNN continual learning methods, including regularization-based, replay-based, parameter-isolation, and biologically inspired SNN learning strategies. Without such comparisons, it is difficult to judge whether the proposed method provides a meaningful improvement over the state of the art."
