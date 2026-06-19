@@ -1,43 +1,49 @@
-# MNIST with Spiking Neural Networks (SNNs)
+# Mimicking Biological Memory Consolidation in Spiking Neural Networks
 
-A research project exploring **Spiking Neural Networks (SNNs)** on the MNIST dataset with a focus on **Long-Term Potentiation (LTP)** and **Long-Term Depression (LTD)** mechanisms to mitigate **catastrophic forgetting** in continual learning scenarios.
+A research project exploring **Spiking Neural Networks (SNNs)** with a focus on **Long-Term Potentiation (LTP)** and **Long-Term Depression (LTD)** mechanisms. This work introduces the **P-Factor**—a biologically grounded utility metric that identifies predictive engrams to mitigate **catastrophic forgetting** in continual learning.
 
 ## Overview
 
-This repository implements and compares different SNN architectures for MNIST digit classification:
+Unlike standard magnitude-based pruning or global regularization approaches, this framework dynamically tracks utility during inference. By isolating and "freezing" high-utility engrams (Expert Neurons) and resetting low-utility neurons (Novice Neurons), this architecture establishes state-of-the-art structural plasticity.
 
-- **Baseline SNN**: A standard spiking neural network using Leaky Integrate-and-Fire (LIF) neurons
-- **LTP/LTD SNN**: An enhanced SNN with P-factor modulation based on prediction outcomes:
-  - **LTP (Long-Term Potentiation)**: Strengthens synapses for neurons that contribute to correct predictions
-  - **LTD (Long-Term Depression)**: Weakens synapses for neurons that fire during incorrect predictions
+We rigorously evaluate this mechanism across three diverse visual benchmarks:
+- **Split-MNIST:** Standard sparse digit classification sequence.
+- **Split-N-MNIST:** High-entropy spatio-temporal neuromorphic event streams.
+- **5-Split Fashion-MNIST:** Dense spatial manifolds forming a 5-task sequence.
 
-The project focuses on **Split MNIST** experiments where the model is trained on digits 0-4 (Task A) first, then on digits 5-9 (Task B), testing retention of Task A knowledge.
+## Repository Structure
 
-## Project Structure
+The codebase has been professionally organized into highly modular directories:
 
 ```
 MNIST with SNN/
-├── MNIST/                      # Original MNIST dataset (.mat format)
-├── spike_mnist_dataset/        # Generated spike-encoded dataset
 ├── src/
-│   ├── dataset.py              # Spike encoding & data loading utilities
-│   ├── utils.py                # Helper functions
+│   ├── dataset.py              # Spike encoding & data wrappers
+│   ├── utils.py                # Core helper functions
 │   └── models/
-│       ├── baseline.py         # Baseline SNN implementation
-│       ├── ltp_ltd.py          # LTP/LTD SNN with P-factor mechanism
-│       └── common.py           # Shared components (LIF neuron)
-├── scripts/
-│   ├── generate_data.py        # Generate spike-encoded MNIST data
-│   ├── run_exp.py              # Master experiment orchestrator
-│   ├── run_baseline.py         # Baseline continual learning experiments
-│   ├── run_freezing.py         # P-factor based neuron freezing experiments
-│   ├── run_random.py           # Random freezing baseline experiments
-│   ├── plot_results.py         # Generate result visualizations
-│   ├── analyze_results.py      # Statistical analysis of results
-│   └── generate_paper_plots.py # Publication-quality figures
-├── results/                    # Experiment results (JSON)
-├── plots/                      # Generated visualizations
-└── README.md                   # This file
+│       ├── ltp_ltd.py          # SNN with dynamic P-factor (Ours)
+│       └── common.py           # Shared components (LIF neuron dynamics)
+├── experiments/
+│   ├── run_freezing.py         # Main P-Factor consolidation engine
+│   ├── run_packnet.py          # PackNet magnitude baseline
+│   ├── run_ewc.py              # Elastic Weight Consolidation baseline
+│   ├── run_si.py               # Synaptic Intelligence baseline
+│   └── sweep_nmnist_exp.py     # Hyperparameter sensitivity sweeps
+├── analysis/
+│   ├── analyze_results.py      # Calculates Task-IL and Class-IL metrics
+│   └── analyze_energy.py       # Spiking energy efficiency calculator
+├── plotting/
+│   ├── generate_paper_plots.py # Core visualization compiler
+│   └── plot_structural_comparison.py # Engram allocation plotting
+├── bash_scripts/
+│   ├── run_all_split_mnist.sh  # Master execution suite for Split-MNIST
+│   └── run_all_nmnist.sh       # Master execution suite for N-MNIST
+├── utils/
+│   ├── generate_data.py        # Generates Poisson spike-encoded tensors
+│   └── update_paper.py         # Automated LaTeX compilation scripts
+├── results/                    # Serialized execution histories (JSON)
+├── checkpoints/                # PyTorch model weights
+└── plots/                      # Generated publication-quality PDFs
 ```
 
 ## Getting Started
@@ -45,10 +51,8 @@ MNIST with SNN/
 ### Prerequisites
 
 - Python 3.8+
-- PyTorch (with CUDA support recommended)
-- NumPy, SciPy, tqdm
-
-### Installation
+- PyTorch (CUDA heavily recommended due to $\mathcal{O}(T)$ SNN time-step simulation)
+- NumPy, SciPy, Matplotlib, Tqdm
 
 ```bash
 # Clone the repository
@@ -56,102 +60,63 @@ git clone <repository-url>
 cd "MNIST with SNN"
 
 # Install dependencies
-pip install torch numpy scipy tqdm matplotlib
+pip install -r requirements.txt
 ```
 
-### Prepare the Dataset
+### Dataset Preparation
 
-1. Place the MNIST dataset in `.mat` format at `MNIST/mnist-original.mat`
-
-2. Generate spike-encoded data:
+1. Download the original MNIST dataset (`mnist-original.mat`) and place it in `MNIST/`
+2. Generate the 100-timestep Poisson spike-encoded tensors:
 ```bash
-python scripts/generate_data.py
+python utils/generate_data.py
 ```
 
-This creates Poisson spike-encoded MNIST data with 100 time steps per sample.
+## Execution Pipeline
 
-## Running Experiments
+We have automated the experimental execution. All core suites execute 5 random seeds to ensure statistical significance.
 
-### Quick Start
+### 1. Run Complete Benchmark Suites
+To reproduce the primary baseline comparisons (P-Factor vs. ER, EWC, SI, PackNet, Random):
 
-Run the full experiment suite:
 ```bash
-python scripts/run_exp.py --runs 5
+# Execute the sparse data sequence (Split-MNIST)
+bash bash_scripts/run_all_split_mnist.sh
+
+# Execute the temporal event stream sequence (N-MNIST)
+bash bash_scripts/run_all_nmnist.sh
+bash bash_scripts/run_all_nmnist_baselines.sh
+
+# Execute the highly dense 5-task sequence (5-Split Fashion-MNIST)
+bash bash_scripts/run_fashion_mnist_multi_split.sh
 ```
 
-This runs:
-- Baseline SNN experiments
-- P-factor freezing experiments (40%, 50%, 60%, 70%, 80% thresholds)
-- Random freezing experiments (as control)
+### 2. Run Hyperparameter Heatmaps
+To generate the $\alpha_{LTP}$ vs $\alpha_{LTD}$ sensitivity sweeps (demonstrating the bimodal capacity trade-off on dense data):
 
-For all epoch configurations (1-5 epochs per task).
-
-### Individual Experiments
-
-**Baseline Continual Learning:**
 ```bash
-python scripts/run_baseline.py --runs 5 --epochs 3
+python experiments/sweep_mnist_exp.py
+python experiments/sweep_nmnist_exp.py
 ```
 
-**P-factor Freezing:**
+### 3. Generate Paper Visualizations
+All plotting scripts ingest the `results/` JSONs and output vector-graphic PDFs into the `plots/` folder:
 ```bash
-python scripts/run_freezing.py --runs 5 --epochs 3 --percentile 0.7
+python plotting/generate_paper_plots.py
+python plotting/plot_structural_comparison.py
 ```
 
-**Random Freezing (Control):**
-```bash
-python scripts/run_random.py --runs 5 --epochs 3 --percentile 0.7
-```
+## Key Mechanisms
 
-### Experiment Parameters
+### 1. P-Factor Utility Tracking
+Instead of relying on weight magnitude or Hessian diagonals, we modulate synaptic plasticity based on localized prediction success:
+- **Correct prediction**: `P_new = P_old + α_LTP × (P_max - P_old)`
+- **Wrong prediction**: `P_new = P_old - α_LTD`
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--runs` | Number of runs with different seeds | 5 |
-| `--epochs` | Training epochs per task | 5 |
-| `--percentile` | Threshold percentile for freezing | 0.7 |
-
-## Key Concepts
-
-### Spike Encoding
-Images are converted to spike trains using **Poisson encoding** where pixel intensity determines firing probability.
-
-### P-Factor Mechanism
-Each neuron has a P-factor that modulates its synaptic weights:
-- **Correct prediction**: `P_new = P_old + α × (P_max - P_old)`  (LTP)
-- **Wrong prediction**: `P_new = P_old - α`  (LTD)
-
-The effective weight becomes: `W_eff = W × (1 + P)`
-
-### Neuron Freezing
+### 2. Structural Consolidation
 To prevent catastrophic forgetting:
-1. After Task A training, neurons with P-factor above a threshold are identified
-2. Their weights are frozen during Task B training
-3. This preserves Task A knowledge while allowing plasticity for Task B
-
-## Analyzing Results
-
-Generate plots from results:
-```bash
-python scripts/plot_results.py
-python scripts/generate_paper_plots.py
-```
-
-Results are saved as JSON files in `results/` and plots in `plots/`.
-
-## Model Architecture
-
-| Layer | Dimensions | Description |
-|-------|------------|-------------|
-| Input | 784 | Flattened 28×28 MNIST images |
-| Hidden | 1024 | LIF neurons with P-factor modulation |
-| Output | 10 | Spike counts for each digit class |
-
-**Hyperparameters:**
-- Batch Size: 32
-- Learning Rate: 1e-3
-- Time Steps: 100
-- Optimizer: Adam
+1. **Engram Identification**: Post-Task A, neurons with a P-factor in the top $\tau$-percentile are identified as the memory engram.
+2. **Gradient Isolation**: These expert neurons have their backward gradients masked during Task B.
+3. **Novice Reset**: The remaining (plastic) neurons are reset and assigned to learn the new incoming spatial manifold.
 
 ## License
 
@@ -159,4 +124,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributing
 
-Contributions are welcome! Please mail me at visheshk24@iitk.ac.in for any further discussion or contribution to the work.
+Contributions are welcome! Please contact `visheshk24@iitk.ac.in` for discussion or collaboration.

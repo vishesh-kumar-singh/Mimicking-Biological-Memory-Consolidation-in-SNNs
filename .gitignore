@@ -70,7 +70,7 @@ venv.bak/
 .mypy_cache/
 
 # Generated data files (large binary files)
-spike_mnist_dataset/*.npy
+spike_mnist_dataset/
 
 # MNIST raw data (download separately)
 MNIST/*.mat

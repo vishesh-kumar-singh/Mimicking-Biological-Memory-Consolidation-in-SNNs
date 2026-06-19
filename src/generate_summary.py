@@ -13,7 +13,7 @@ Supported experiment types:
 
 Usage:
 ------
-    Called by scripts/analyze_results.py, not typically run directly.
+    Called by experiments/analyze_results.py, not typically run directly.
 """
 
 import os

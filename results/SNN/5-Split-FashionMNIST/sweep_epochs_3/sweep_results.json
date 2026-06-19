@@ -1,0 +1,15 @@
+[
+    {
+        "config_name": "fmnist_5t_si_1000000_e3",
+        "percentile": 0.15,
+        "alpha_ltp": 0.05,
+        "alpha_ltd": 0.005,
+        "hidden_size": 1024,
+        "epochs": 3,
+        "lr": 0.001,
+        "avg_class_il": 23.252857142857142,
+        "std_class_il": 4.074261170032262,
+        "avg_task_il": 93.6557142857143,
+        "std_task_il": 5.498115447077096
+    }
+]

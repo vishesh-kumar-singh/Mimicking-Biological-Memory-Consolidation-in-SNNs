@@ -1,0 +1,110 @@
+[
+    {
+        "ltp": 0.005,
+        "ltd": 0.015,
+        "task_a_class_il": 98.56209150326798,
+        "task_a_task_il": 98.56209150326798,
+        "task_b_class_il": 0.0,
+        "task_b_task_il": 18.313212038768917,
+        "combined_acc": 50.69166666666667
+    },
+    {
+        "ltp": 0.01,
+        "ltd": 0.001,
+        "task_a_class_il": 0.3104575163398693,
+        "task_a_task_il": 98.4967320261438,
+        "task_b_class_il": 98.11256589015474,
+        "task_b_task_il": 98.11256589015474,
+        "combined_acc": 48.391666666666666
+    },
+    {
+        "ltp": 0.01,
+        "ltd": 0.005,
+        "task_a_class_il": 1.8954248366013071,
+        "task_a_task_il": 98.48039215686275,
+        "task_b_class_il": 98.21458935555178,
+        "task_b_task_il": 98.21458935555178,
+        "combined_acc": 49.375
+    },
+    {
+        "ltp": 0.01,
+        "ltd": 0.01,
+        "task_a_class_il": 0.8333333333333334,
+        "task_a_task_il": 98.20261437908496,
+        "task_b_class_il": 96.80326475089271,
+        "task_b_task_il": 96.80326475089271,
+        "combined_acc": 48.20833333333333
+    },
+    {
+        "ltp": 0.005,
+        "ltd": 0.001,
+        "task_a_class_il": 1.2745098039215685,
+        "task_a_task_il": 98.13725490196077,
+        "task_b_class_il": 97.38139772147593,
+        "task_b_task_il": 97.38139772147593,
+        "combined_acc": 48.88333333333333
+    },
+    {
+        "ltp": 0.001,
+        "ltd": 0.001,
+        "task_a_class_il": 2.320261437908497,
+        "task_a_task_il": 97.79411764705883,
+        "task_b_class_il": 98.0105424247577,
+        "task_b_task_il": 98.0105424247577,
+        "combined_acc": 49.53333333333333
+    },
+    {
+        "ltp": 0.005,
+        "ltd": 0.005,
+        "task_a_class_il": 1.0130718954248366,
+        "task_a_task_il": 97.79411764705883,
+        "task_b_class_il": 98.31661282094882,
+        "task_b_task_il": 98.31661282094882,
+        "combined_acc": 49.075
+    },
+    {
+        "ltp": 0.01,
+        "ltd": 0.015,
+        "task_a_class_il": 0.3431372549019608,
+        "task_a_task_il": 97.38562091503267,
+        "task_b_class_il": 98.5376636626424,
+        "task_b_task_il": 98.5376636626424,
+        "combined_acc": 48.84166666666667
+    },
+    {
+        "ltp": 0.005,
+        "ltd": 0.01,
+        "task_a_class_il": 0.0,
+        "task_a_task_il": 93.54575163398692,
+        "task_b_class_il": 97.97653460295868,
+        "task_b_task_il": 97.97653460295868,
+        "combined_acc": 48.16666666666667
+    },
+    {
+        "ltp": 0.001,
+        "ltd": 0.005,
+        "task_a_class_il": 90.2124183006536,
+        "task_a_task_il": 90.2124183006536,
+        "task_b_class_il": 0.0,
+        "task_b_task_il": 18.313212038768917,
+        "combined_acc": 46.19166666666666
+    },
+    {
+        "ltp": 0.001,
+        "ltd": 0.01,
+        "task_a_class_il": 14.558823529411766,
+        "task_a_task_il": 19.330065359477125,
+        "task_b_class_il": 0.06801564359802754,
+        "task_b_task_il": 18.330215949668425,
+        "combined_acc": 7.383333333333334
+    },
+    {
+        "ltp": 0.001,
+        "ltd": 0.015,
+        "task_a_class_il": 18.92156862745098,
+        "task_a_task_il": 19.330065359477125,
+        "task_b_class_il": 0.05101173269852066,
+        "task_b_task_il": 18.313212038768917,
+        "combined_acc": 9.475
+    }
+]
