@@ -139,13 +139,15 @@ def main():
     # Plot histogram
     plt.figure(figsize=(10, 6))
     plt.hist(per_neuron_rates, bins=50, color='skyblue', edgecolor='black')
-    plt.title('Hidden Neuron Firing Rate Distribution (Task A)')
-    plt.xlabel('Fraction of Test Samples where Neuron Fired')
-    plt.ylabel('Number of Neurons')
+    plt.title('Hidden Neuron Firing Rate Distribution (Task A)', fontsize=24)
+    plt.xlabel('Fraction of Test Samples where Neuron Fired', fontsize=20)
+    plt.ylabel('Number of Neurons', fontsize=20)
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
     plt.grid(axis='y', alpha=0.75)
     
     plt.axvline(x=0.05, color='r', linestyle='--', label='5% Threshold')
-    plt.legend()
+    plt.legend(fontsize=18)
     
     out_dir = "results/SNN/Split-MNIST"
     os.makedirs(out_dir, exist_ok=True)

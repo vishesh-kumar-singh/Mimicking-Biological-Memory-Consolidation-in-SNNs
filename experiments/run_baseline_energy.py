@@ -1,5 +1,8 @@
 import sys
 import os
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(ROOT_DIR)
+
 import torch
 import json
 from analysis.analyze_energy import count_spikes_inference
@@ -14,7 +17,7 @@ from experiments.run_er import run_experiment as run_er
 seed = 42
 epochs = 3
 device = "cuda" if torch.cuda.is_available() else "cpu"
-data_dir = "spike_mnist_dataset"
+data_dir = os.path.join(ROOT_DIR, "spike_mnist_dataset")
 dataset_name = "Split-MNIST"
 
 spike_file = os.path.join(data_dir, "spike_trains_100ts.npy")
@@ -59,7 +62,7 @@ res_si = count_spikes_inference(model_si, test_all, device)
 print("SI SynOps:", res_si["synops_total_per_sample"])
 results["SI"] = res_si
 
-output_dir = f"results/SNN/{dataset_name}/energy"
+output_dir = os.path.join(ROOT_DIR, f"results/SNN/{dataset_name}/energy")
 os.makedirs(output_dir, exist_ok=True)
 output_file = os.path.join(output_dir, f"baseline_energy_comparison_seed{seed}_epochs{epochs}.json")
 

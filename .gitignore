@@ -105,7 +105,7 @@ logs/
 *.swp
 *.tex
 *.txt
-
+reviews.md
 # Massive Datasets (Preventing git push HTTP 500 error)
 data/
 FashionMNIST/

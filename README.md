@@ -21,17 +21,23 @@ MNIST with SNN/
 │   ├── dataset.py              # Spike encoding & data wrappers
 │   ├── utils.py                # Core helper functions
 │   └── models/
-│       ├── ltp_ltd.py          # SNN with dynamic P-factor (Ours)
-│       └── common.py           # Shared components (LIF neuron dynamics)
+│       ├── ltp_ltd.py              # SNN with dynamic P-factor (Neuron-Level)
+│       ├── synaptic_p_factor.py    # Ideal Synaptic-Level P-Factor baseline
+│       └── common.py               # Shared components (LIF neuron dynamics)
 ├── experiments/
-│   ├── run_freezing.py         # Main P-Factor consolidation engine
-│   ├── run_packnet.py          # PackNet magnitude baseline
-│   ├── run_ewc.py              # Elastic Weight Consolidation baseline
-│   ├── run_si.py               # Synaptic Intelligence baseline
-│   └── sweep_nmnist_exp.py     # Hyperparameter sensitivity sweeps
+│   ├── run_freezing.py             # Main P-Factor consolidation engine
+│   ├── run_synaptic_baseline.py    # Synaptic-level consolidation experiment
+│   ├── run_baseline_energy.py      # Energy/SynOps comparison suite
+│   ├── run_packnet.py              # PackNet magnitude baseline
+│   ├── run_ewc.py                  # Elastic Weight Consolidation baseline
+│   ├── run_si.py                   # Synaptic Intelligence baseline
+│   └── sweep_nmnist_exp.py         # Hyperparameter sensitivity sweeps
 ├── analysis/
-│   ├── analyze_results.py      # Calculates Task-IL and Class-IL metrics
-│   └── analyze_energy.py       # Spiking energy efficiency calculator
+│   ├── analyze_results.py              # Calculates Task-IL and Class-IL metrics
+│   ├── analyze_energy.py               # Spiking energy efficiency calculator
+│   ├── analyze_collateral.py           # Quantifies collateral locking in engrams
+│   ├── analyze_sparsity_coverage.py    # Analyzes firing-rate sparsity distribution
+│   └── measure_memory.py               # Calculates structural memory overhead
 ├── plotting/
 │   ├── generate_paper_plots.py # Core visualization compiler
 │   └── plot_structural_comparison.py # Engram allocation plotting
